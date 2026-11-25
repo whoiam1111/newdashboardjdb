@@ -47,7 +47,7 @@ function doPost(e) {
         return json_({ error: 'bad request' });
     }
     if (!authorized_(body.token)) return json_({ error: 'unauthorized' });
-    if (body.action !== 'setPassword' || !/^[가-힣a-z0-9]{1,20}$/i.test(body.id || '') || !/^scrypt\$[0-9a-f]+\$[0-9a-f]+$/.test(body.hash || ''))
+    if (body.action !== 'setPassword' || !/^[가-힣a-z0-9]{1,20}$/i.test(body.id || '') || !/^scrypt\$[0-9a-f]+\$[0-9a-f]+(\$reset)?$/.test(body.hash || ''))
         return json_({ error: 'bad request' });
     const lock = LockService.getScriptLock();
     lock.waitLock(10000);

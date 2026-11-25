@@ -6,6 +6,7 @@ import {
     authenticate,
     hashPassword,
     lockedMinutes,
+    RESET_MARK,
     newPasswordError,
     recordLogin,
     REGION_IDS,
@@ -21,7 +22,9 @@ export async function login(_: string | null, form: FormData) {
     try {
         user = await authenticate(id, String(form.get('password') ?? ''));
     } catch (e) {
-        return (e as Error).message;
+        // 로그인 전 사용자에게는 내부 설정·오류 내용을 보여주지 않는다
+        console.error('login:', (e as Error).message);
+        return '지금은 로그인할 수 없습니다. 관리자에게 문의해주세요.';
     }
     recordLogin(id, !!user);
     if (!user) return '아이디 또는 비밀번호가 올바르지 않습니다.';
@@ -40,8 +43,10 @@ export async function changeMyPassword(_: string | null, form: FormData) {
     const next = String(form.get('next') ?? '');
     const error = newPasswordError(next, String(form.get('confirm') ?? ''));
     if (error) return error;
+    const current = String(form.get('current') ?? '');
+    if (next === current) return '새 비밀번호는 현재 비밀번호와 달라야 합니다.';
     try {
-        if (!(await authenticate(user.id, String(form.get('current') ?? '')))) return '현재 비밀번호가 올바르지 않습니다.';
+        if (!(await authenticate(user.id, current))) return '현재 비밀번호가 올바르지 않습니다.';
         await sheetStore.set(user.id, hashPassword(next));
     } catch (e) {
         return (e as Error).message;
@@ -61,7 +66,7 @@ export async function setRegionPassword(_: Result, form: FormData): Promise<Resu
     const error = newPasswordError(next, next);
     if (error) return { ok: false, message: error };
     try {
-        await sheetStore.set(id, hashPassword(next));
+        await sheetStore.set(id, hashPassword(next) + RESET_MARK); // 받은 사람이 첫 로그인 때 바꾸게
     } catch (e) {
         return { ok: false, message: (e as Error).message };
     }

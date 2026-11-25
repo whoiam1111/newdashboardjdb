@@ -34,7 +34,12 @@ export function findDuplicates(records: Row[], user: User, includeDropped: boole
             이름: key.split('|')[0],
             연락처: key.split('|')[1],
             지역: [...new Set(rows.map((r) => r.인도자지역 || '(없음)'))],
-            rows: rows.map((r) => Object.fromEntries(DUP_COLS.map((c) => [c, r[c] ?? '']))),
+            // 내 범위 밖 줄의 연락처는 뒤 4자리만 (비교에는 그것만 필요)
+            rows: rows.map((r) => {
+                const row = Object.fromEntries(DUP_COLS.map((c) => [c, r[c] ?? '']));
+                if (!inScope(r, user)) row.연락처 = row.연락처.replace(/\d(?=(?:\D*\d){4})/g, '*');
+                return row;
+            }),
         }))
         .sort((a, b) => a.이름.localeCompare(b.이름, 'ko'));
 }

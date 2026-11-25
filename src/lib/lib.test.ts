@@ -1,7 +1,7 @@
 import { expect, test, vi } from 'vitest';
 import { readSheet, toRecords } from './sheet';
 import { computeGoals, currentCampaign, parseCampaigns } from './goals';
-import { buildTeachers } from './teachers';
+import { ageOf, buildTeachers, matchTeachers } from './teachers';
 import { signSession, verifySession } from './session';
 import { authenticate, hashPassword, lockedMinutes, newPasswordError, recordLogin, sheetStore, verifyHash, type Store, type Stored } from './accounts';
 import { findDuplicates, forUser, isDropped, summarize } from './dashboard';
@@ -30,27 +30,37 @@ test('session: 계정·지역·첫 비밀번호 표시가 그대로 돌아온다
     expect(await verifySession(undefined)).toBe(null);
 });
 
-test('authenticate: 처음엔 jdb1234 + 변경 필요, 바꾼 뒤엔 새 비번만', async () => {
+test('authenticate: 처음엔 INITIAL_PASSWORD + 변경 필요, 바꾼 뒤엔 새 비번만', async () => {
+    process.env.INITIAL_PASSWORD = 'jdb1234';
     const saved: Stored[] = [];
     const store: Store = {
         list: async () => saved,
         set: async (id, hash) => void saved.push({ id, hash, updatedAt: 'now' }),
     };
-    expect(await authenticate('도봉', 'jdb1234', store)).toEqual({ id: '도봉', region: '도봉', mustChange: true });
-    expect(await authenticate('jdb', 'jdb1234', store)).toEqual({ id: 'jdb', region: null, mustChange: true });
+    expect(await authenticate('도봉', 'jdb1234', store)).toBe(null); // 8자 미만 처음 비밀번호는 무시
+    process.env.INITIAL_PASSWORD = 'init-pass-1234';
+    expect(await authenticate('도봉', 'jdb1234', store)).toBe(null); // 예전 공개 비밀번호
+    expect(await authenticate('도봉', 'init-pass-1234', store)).toEqual({ id: '도봉', region: '도봉', mustChange: true });
+    expect(await authenticate('jdb', 'init-pass-1234', store)).toEqual({ id: 'jdb', region: null, mustChange: true });
     expect(await authenticate('도봉', 'wrong', store)).toBe(null);
-    expect(await authenticate('admin', 'jdb1234', store)).toBe(null); // 목록에 없는 아이디
+    expect(await authenticate('admin', 'init-pass-1234', store)).toBe(null); // 목록에 없는 아이디
     await store.set('도봉', hashPassword('새비밀번호123'));
-    expect(await authenticate('도봉', 'jdb1234', store)).toBe(null);
+    expect(await authenticate('도봉', 'init-pass-1234', store)).toBe(null);
     expect(await authenticate(' 도봉 ', '새비밀번호123', store)).toEqual({ id: '도봉', region: '도봉', mustChange: false });
     expect(verifyHash('x', 'garbage')).toBe(false);
+    // 관리자가 정해준 비밀번호: 로그인은 되지만 바꿔야 함
+    await store.set('노원', hashPassword('관리자가정함1') + '$reset');
+    expect(await authenticate('노원', '관리자가정함1', store)).toEqual({ id: '노원', region: '노원', mustChange: true });
 });
 
 test('newPasswordError / 로그인 잠금', () => {
     expect(newPasswordError('short', 'short')).toMatch('8자');
     expect(newPasswordError('jdb1234', 'jdb1234')).toMatch('8자');
     expect(newPasswordError('abcdefgh', 'abcdefgX')).toMatch('다릅니다');
+    expect(newPasswordError('init-pass-1234', 'init-pass-1234')).toMatch('처음 비밀번호');
     expect(newPasswordError('abcdefgh', 'abcdefgh')).toBe(null);
+    recordLogin('없는아이디', false, 0);
+    expect(lockedMinutes('없는아이디', 1000)).toBe(0);
     for (let i = 0; i < 5; i++) recordLogin('성북', false, 0);
     expect(lockedMinutes('성북', 1000)).toBe(10);
     expect(lockedMinutes('성북', 11 * 60_000)).toBe(0);
@@ -98,7 +108,7 @@ test('sheetStore: 예전 배포(계정 목록 없음·저장 미지원)면 jdb12
         .mockResolvedValueOnce(new Response(JSON.stringify({ title: '전체명단', values: [] })))
         .mockResolvedValueOnce(new Response('<html>Script function not found: doPost</html>'));
     vi.stubGlobal('fetch', fetchMock);
-    await expect(authenticate('도봉', 'jdb1234')).rejects.toThrow('예전 버전');
+    await expect(authenticate('도봉', 'init-pass-1234')).rejects.toThrow('예전 버전');
     await expect(sheetStore.set('도봉', 'scrypt$a$b')).rejects.toThrow('JSON 이 아닌 응답');
     vi.unstubAllGlobals();
 });
@@ -122,6 +132,9 @@ test('findDuplicates / isDropped: 다른 지역 이름+뒷4자리, 지역 계정
     const sb = { id: '성북', region: '성북', mustChange: false };
     expect(findDuplicates(rows, sb, false)).toEqual([]);
     expect(findDuplicates(rows, sb, true)[0].지역).toEqual(['도봉', '노원', '성북']);
+    // 성북 계정에게 도봉 줄 연락처는 뒤 4자리만, 관리자는 전체
+    expect(findDuplicates(rows, sb, true)[0].rows[0].연락처).toBe('***-****-2222');
+    expect(findDuplicates(rows, admin, true)[0].rows[0].연락처).toBe('010-1111-2222');
 });
 
 test('목표 달성: 개강 기간, 발·찾 발굴 주차, 0.5점 나눔, 목표 × 배수, 목표월', () => {
@@ -177,4 +190,22 @@ test('buildTeachers: 지역 범위, 담당 학생(고유번호 또는 지역+이
     ]);
     expect(buildTeachers(values, students, { id: '노원', region: '노원', mustChange: false }).teachers.map((t) => t.row.고유번호)).toEqual(['T3']);
     expect(all.map((t) => t.row.등급)).toEqual(['상', '중', '중']); // 박교사는 뒤 줄 등급 '중'으로 채워짐
+});
+
+test('ageOf / matchTeachers: 성별·나이·지역·등급·담당·키워드 점수', () => {
+    expect(ageOf('20대초', 2026)).toBe(22);
+    expect(ageOf('1996', 2026)).toBe(30);
+    expect(ageOf('96', 2026)).toBe(30);
+    expect(ageOf('05', 2026)).toBe(21);
+    expect(ageOf('모름', 2026)).toBe(null);
+    const t = (key: string, row: Record<string, string>, 담당: string[] = []) => ({ key, row, 담당, 활동: 담당.length > 0, 프로필: true });
+    const list = [
+        t('a', { 이름: 'A', 지역: '도봉', 성별: '남', 출생연도: '2001', 등급: '상', 교사형태: '정교사', 가능시간: '주말 저녁' }),
+        t('b', { 이름: 'B', 지역: '노원', 성별: '여', 출생연도: '1980', 등급: '하' }, ['x', 'y', 'z', 'w', 'v']),
+        t('c', { 이름: 'C', 지역: '도봉', 성별: '남자', 출생연도: '1975', 등급: '중' }, ['x']),
+    ];
+    const res = matchTeachers(list, { 성별: '남', 나이: '20대초', 지역: '도봉', 키워드: '주말' }, 2026);
+    expect(res.map((m) => m.t.key)).toEqual(['a', 'c', 'b']);
+    expect(res[0].reasons).toEqual(['같은 성별', '같은 지역', '나이 비슷 (±3)', '등급 상', '정교사', '담당 없음', "'주말'"]);
+    expect(matchTeachers(list, { 성별: '남', 같은성별만: true }, 2026).map((m) => m.t.key)).toEqual(['a', 'c']);
 });

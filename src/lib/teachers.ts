@@ -46,3 +46,50 @@ export function buildTeachers(values: string[][], students: Row[], user: User) {
         });
     return { teachers, duplicates };
 }
+
+// '1990', '90', '20대', '20대초/중/후' → 대략 나이. 모르면 null
+export function ageOf(v = '', year = new Date().getFullYear()) {
+    const s = v.replace(/\s/g, '');
+    const dec = s.match(/^(\d)0대(초|중|후)?/);
+    if (dec) return Number(dec[1]) * 10 + ({ 초: 2, 중: 5, 후: 8 }[dec[2] as '초'] ?? 5);
+    const y = s.match(/^(\d{4}|\d{2})(?!\d)/)?.[1];
+    if (!y) return null;
+    const full = y.length === 4 ? Number(y) : 1900 + Number(y) + (Number(y) + 2000 <= year ? 100 : 0);
+    return year - full >= 0 && year - full < 100 ? year - full : null;
+}
+
+export type MatchWant = { 성별?: string; 나이?: string; 지역?: string; 키워드?: string; 같은성별만?: boolean };
+export type Match = { t: TeacherView; score: number; reasons: string[] };
+
+// 교사 매칭 점수. 점수가 높을수록 추천, reasons 에 왜 점수를 줬는지
+export function matchTeachers(teachers: TeacherView[], want: MatchWant, year = new Date().getFullYear()): Match[] {
+    const sex = (v = '') => v.trim().slice(0, 1); // '남자' → '남'
+    const age = ageOf(want.나이, year);
+    const words = (want.키워드 ?? '').split(/[\s,]+/).filter(Boolean);
+    return teachers
+        .filter((t) => !want.같은성별만 || !want.성별 || sex(t.row.성별) === sex(want.성별))
+        .map((t) => {
+            const r = t.row;
+            const reasons: string[] = [];
+            let score = 0;
+            const add = (n: number, why: string) => ((score += n), reasons.push(why));
+            if (want.성별 && sex(r.성별) === sex(want.성별)) add(3, '같은 성별');
+            if (want.지역 && r.지역 === want.지역) add(2, '같은 지역');
+            const ta = ageOf(r.출생연도, year);
+            if (age !== null && ta !== null) {
+                const gap = Math.abs(age - ta);
+                if (gap <= 5) add(2, `나이 비슷 (±${gap})`);
+                else if (gap <= 10) add(1, `나이 ±${gap}`);
+            }
+            if (r.등급 === '상') add(2, '등급 상');
+            else if (r.등급 === '중') add(1, '등급 중');
+            if (r.교사형태 === '정교사') add(1, '정교사');
+            if (t.담당.length === 0) add(2, '담당 없음');
+            else if (t.담당.length <= 2) add(1, `담당 ${t.담당.length}명`);
+            else if (t.담당.length >= 5) add(-1, `담당 많음 ${t.담당.length}명`);
+            const text = PROFILE_COLS.map((c) => r[c]).join(' ');
+            for (const w of words) if (text.includes(w)) add(2, `'${w}'`);
+            return { t, score, reasons };
+        })
+        .sort((a, b) => b.score - a.score || a.t.담당.length - b.t.담당.length);
+}
