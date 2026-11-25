@@ -93,3 +93,42 @@ export function matchTeachers(teachers: TeacherView[], want: MatchWant, year = n
         })
         .sort((a, b) => b.score - a.score || a.t.담당.length - b.t.담당.length);
 }
+
+// 지역별 비교 칸
+export const COMPARE = {
+    MBTI: ['E', 'I'],
+    에니어그램: ['가슴형', '머리형', '장형'],
+    성별: ['남', '여'],
+    나이: ['20대초', '20대중', '20대후', '30대초', '30대중', '30대후'],
+} as const;
+// 에니어그램 번호 → 유형 (가슴 2·3·4, 머리 5·6·7, 장 8·9·1)
+const ENNEA: Record<string, string> = { 2: '가슴형', 3: '가슴형', 4: '가슴형', 5: '머리형', 6: '머리형', 7: '머리형', 8: '장형', 9: '장형', 1: '장형' };
+
+// 교사 한 명이 비교 칸 어디에 들어가는지. 값이 없거나 못 읽으면 그 칸은 빈 문자열
+export function groupsOf(r: Record<string, string>, year = new Date().getFullYear()) {
+    const mbti = (r.MBTI ?? '').trim().toUpperCase().slice(0, 1);
+    const e = r.에니어그램 ?? '';
+    const age = ageOf(r.출생연도, year);
+    const band = age === null ? '' : `${Math.floor(age / 10) * 10}대${age % 10 <= 3 ? '초' : age % 10 <= 6 ? '중' : '후'}`;
+    return {
+        MBTI: ['E', 'I'].includes(mbti) ? mbti : '',
+        에니어그램: e.match(/가슴|머리|장/)?.[0].concat('형') ?? ENNEA[e.match(/[1-9]/)?.[0] ?? ''] ?? '',
+        성별: (r.성별 ?? '').trim().slice(0, 1),
+        나이: band,
+    };
+}
+
+// 지역별 비교 표: 지역마다 칸별 교사 수, 맨 아래 합계
+export function compareRegions(teachers: TeacherView[], year = new Date().getFullYear()): Record<string, string | number>[] {
+    const count = (list: TeacherView[]) => {
+        const g = list.map((t) => groupsOf(t.row, year));
+        const row: Record<string, number> = { 교사: list.length };
+        for (const [k, vals] of Object.entries(COMPARE)) for (const v of vals) row[v] = g.filter((x) => x[k as keyof typeof COMPARE] === v).length;
+        return row;
+    };
+    const regions = [...new Set(teachers.map((t) => t.row.지역 || '(없음)'))];
+    return [
+        ...regions.map((region) => ({ region, ...count(teachers.filter((t) => (t.row.지역 || '(없음)') === region)) })),
+        { region: '합계', ...count(teachers) },
+    ];
+}
