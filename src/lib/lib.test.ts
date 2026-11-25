@@ -125,16 +125,29 @@ test('findDuplicates / isDropped: 다른 지역 이름+뒷4자리, 지역 계정
         { 번호: '8', 현재상태: '발', 이름: '최', 연락처: '4444', 인도자지역: '중랑' },
         { 번호: '9', 현재상태: '합탈', 이름: '최', 연락처: '4444', 인도자지역: '강북' },
     ];
+    rows.push(
+        { 번호: '10', 현재상태: '탈', 이름: '정', 연락처: '5555', 인도자지역: '도봉', 발굴탈락날짜: '2026-10-01' },
+        { 번호: '11', 현재상태: '찾탈', 이름: '정', 연락처: '5555', 인도자지역: '노원' }, // 둘 다 탈락
+    );
+    Object.assign(rows[0], { 발굴등록날짜: '2026-09-01' });
+    Object.assign(rows[1], { 찾기날짜: '2026. 11. 20' });
+    Object.assign(rows[2], { 발굴탈락날짜: '2026-10-05' });
+    Object.assign(rows[7], { 발굴등록날짜: '2026-11-25' });
     const admin = { id: 'jdb', region: null, mustChange: false };
     expect(isDropped(rows[6])).toBe(true);
-    expect(findDuplicates(rows, admin, false).map((g) => [g.이름, g.rows.length])).toEqual([['김철수', 2]]);
-    expect(findDuplicates(rows, admin, true).map((g) => [g.이름, g.rows.length])).toEqual([['김철수', 3], ['최', 2]]);
+    // 진행 중인 줄이 하나라도 있으면 탈락 줄도 함께, 최근 날짜 순 (묶음·줄 모두)
+    const cur = findDuplicates(rows, admin, false);
+    expect(cur.map((g) => [g.이름, g.최근날짜, g.rows.map((r) => r.번호)])).toEqual([
+        ['최', '2026-11-25', ['8', '9']],
+        ['김철수', '2026-11-20', ['2', '3', '1']],
+    ]);
+    expect(findDuplicates(rows, admin, true).map((g) => g.이름)).toEqual(['최', '김철수', '정']);
     const sb = { id: '성북', region: '성북', mustChange: false };
-    expect(findDuplicates(rows, sb, false)).toEqual([]);
-    expect(findDuplicates(rows, sb, true)[0].지역).toEqual(['도봉', '노원', '성북']);
+    expect(findDuplicates(rows, sb, false).map((g) => g.이름)).toEqual(['김철수']); // 성북은 탈락 줄이지만 같은 묶음에 진행 중이 있음
+    expect(findDuplicates(rows, sb, true)[0].지역).toEqual(['노원', '성북', '도봉']);
     // 성북 계정에게 도봉 줄 연락처는 뒤 4자리만, 관리자는 전체
-    expect(findDuplicates(rows, sb, true)[0].rows[0].연락처).toBe('***-****-2222');
-    expect(findDuplicates(rows, admin, true)[0].rows[0].연락처).toBe('010-1111-2222');
+    expect(findDuplicates(rows, sb, true)[0].rows[2].연락처).toBe('***-****-2222');
+    expect(cur[1].rows[2].연락처).toBe('010-1111-2222');
 });
 
 test('목표 달성: 개강 기간, 발·찾 발굴 주차, 0.5점 나눔, 목표 × 배수, 목표월', () => {
