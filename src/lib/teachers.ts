@@ -173,17 +173,29 @@ export function searchTeachers(teachers: TeacherView[], f: SearchFilters, year =
             const a = ageOf(r.출생연도, year);
             if (a === null || (min && a < min) || (max && a > max)) return false;
         }
-        // MBTI 는 고른 글자가 모두 들어 있으면 (NF → ENFP, INFJ …)
-        if (mbti) {
-            const v = (f.mbtiTarget === 'preferred' ? r.선호사항 : r.MBTI)?.toUpperCase() ?? '';
-            if (![...mbti].every((c) => v.includes(c))) return false;
-        }
-        if (ennea) {
-            const ok = f.enneaTarget === 'preferred' ? new RegExp(`(^|[^0-9])${ennea}([^0-9]|$)`).test(r.선호사항 ?? '') : (r.에니어그램 ?? '').trim().startsWith(ennea);
-            if (!ok) return false;
-        }
+        // MBTI 는 고른 글자가 모두 들어 있으면 (NF → ENFP, INFJ …). 선호는 선호 한 줄 안에서 비교
+        const hasLetters = (v = '') => [...mbti].every((c) => v.toUpperCase().includes(c));
+        const prefs = prefsOf(r.선호사항);
+        if (mbti && !(f.mbtiTarget === 'preferred' ? prefs.some((p) => p.mbti && hasLetters(p.mbti)) : hasLetters(r.MBTI))) return false;
+        if (ennea && !(f.enneaTarget === 'preferred' ? prefs.some((p) => p.ennea === ennea) : (r.에니어그램 ?? '').trim().startsWith(ennea))) return false;
         return true;
     });
+}
+
+// 선호사항 칸 (jdb 와 같은 형식): 한 줄에 'MBTI / N번 / 이유', 빠진 칸이 있어도 된다 ('2번 / 이유')
+export type Pref = { mbti: string; ennea: string; reason: string };
+export function prefsOf(v = ''): Pref[] {
+    return v
+        .split(/\n/)
+        .map((line) => {
+            const parts = line.split('/').map((s) => s.trim()).filter(Boolean);
+            // '/' 로 나뉜 칸을 먼저 보고, 없으면 줄 안에서 찾는다 ('INTJ 5번' 처럼 띄어 쓴 경우)
+            const mbti = (parts.find((s) => /^[EISNTFJP]{2,4}$/i.test(s)) ?? line.match(/\b([EI][NS][TF][JP])\b/i)?.[1] ?? '').toUpperCase();
+            const ennea = parts.map((s) => s.match(/^([1-9])\s*번?$/)?.[1]).find(Boolean) ?? line.match(/([1-9])\s*번/)?.[1] ?? '';
+            const reason = parts.filter((s) => s.toUpperCase() !== mbti && !/^[1-9]\s*번?$/.test(s)).join(' / ');
+            return { mbti, ennea, reason };
+        })
+        .filter((p) => p.mbti || p.ennea || p.reason);
 }
 
 // 이전 종교 "기독교,장로" → "기독교(장로)", 무교 → "무신앙"

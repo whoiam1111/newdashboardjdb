@@ -5,7 +5,7 @@ import { IdcardOutlined, PieChartOutlined, SearchOutlined, TableOutlined } from 
 import { CardTitle } from '../../ui';
 import type { ColumnsType } from 'antd/es/table';
 import { COMPARE, compareRegions, PROFILE_COLS, type TeacherView } from '@/lib/teachers';
-import MatchFinder, { type Student } from './Match';
+import MatchFinder from './Match';
 
 const GRADES = ['상', '중', '하'];
 const TYPES = ['정교사', '교사', '예비교사'];
@@ -31,7 +31,8 @@ function Profile({ t }: { t: TeacherView }) {
     const extra = Object.entries(r).filter(([k, v]) => k && v && !SHOWN.has(k));
     const item = (label: string, value?: string) => (
         <Descriptions.Item key={label} label={label}>
-            {value || <span style={{ color: 'var(--muted)' }}>-</span>}
+            {/* 선호사항처럼 여러 줄인 칸은 줄바꿈 그대로 */}
+            {value ? <span style={{ whiteSpace: 'pre-line' }}>{value}</span> : <span style={{ color: 'var(--muted)' }}>-</span>}
         </Descriptions.Item>
     );
     return (
@@ -100,7 +101,7 @@ function Profile({ t }: { t: TeacherView }) {
     );
 }
 
-export default function Teachers({ teachers, duplicates, students }: { teachers: TeacherView[]; duplicates: number; students: Student[] }) {
+export default function Teachers({ teachers, duplicates }: { teachers: TeacherView[]; duplicates: number }) {
     const [q, setQ] = useState('');
     const [open, setOpen] = useState<TeacherView | null>(null);
     const [showProfile, setShowProfile] = useState(false);
@@ -245,7 +246,7 @@ export default function Teachers({ teachers, duplicates, students }: { teachers:
                     교사 탭의 MBTI·에니어그램·성별·출생연도 칸으로 셉니다. 값이 없거나 범위 밖(40대 이상 등)인 교사는 그 칸에 세지 않아 합이 교사 수보다 작을 수 있습니다. 에니어그램: 가슴형 2·3·4번, 머리형 5·6·7번, 장형 8·9·1번.
                 </div>
             </Card>
-            <MatchFinder teachers={teachers} students={students} onOpen={setOpen} />
+            <MatchFinder teachers={teachers} onOpen={setOpen} />
             <Card
                 title={<CardTitle icon={<IdcardOutlined />}>교사 관리 {shown.length}명</CardTitle>}
                 extra={

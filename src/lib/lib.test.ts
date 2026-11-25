@@ -1,7 +1,7 @@
 import { expect, test, vi } from 'vitest';
 import { readSheet, toRecords } from './sheet';
 import { computeGoals, currentCampaign, parseCampaigns } from './goals';
-import { ageOf, buildTeachers, compareRegions, EMPTY_FILTERS, formatTeacherProfile, groupsOf, matchTeachers, searchTeachers, type SearchFilters } from './teachers';
+import { ageOf, buildTeachers, compareRegions, EMPTY_FILTERS, formatTeacherProfile, groupsOf, matchTeachers, prefsOf, searchTeachers, type SearchFilters } from './teachers';
 import { signSession, verifySession } from './session';
 import { authenticate, hashPassword, lockedMinutes, newPasswordError, recordLogin, sheetStore, verifyHash, type Store, type Stored } from './accounts';
 import { findDuplicates, forUser, isDropped, summarize } from './dashboard';
@@ -253,4 +253,21 @@ test('searchTeachers / formatTeacherProfile: jdb 교사 조회 조건과 양식'
         '▪️이름/성별/나이: 가/남/28',
     );
     expect(formatTeacherProfile({ 이름: '가', 종교: '기독교,장로', 신앙연수: '3', 가능시간: '주말오후,평일 저녁' }, 2026)).toMatch(/기독교\(장로\)\/3년[\s\S]*만남가능 일시: 평일 저녁, 주말 오후/);
+});
+
+test('prefsOf / 선호 검색: 시트 선호사항 칸 (줄마다 MBTI / N번 / 이유)', () => {
+    const text = 'ENFJ / 1번 / 대화가 잘 통함\n 9번 / 편안함\n INTP / 6번 / 차분함';
+    expect(prefsOf(text)).toEqual([
+        { mbti: 'ENFJ', ennea: '1', reason: '대화가 잘 통함' },
+        { mbti: '', ennea: '9', reason: '편안함' },
+        { mbti: 'INTP', ennea: '6', reason: '차분함' },
+    ]);
+    expect(prefsOf('2번 / 이유')).toEqual([{ mbti: '', ennea: '2', reason: '이유' }]);
+    const t = (row: Record<string, string>) => ({ key: row.이름, row, 담당: [], 활동: false, 프로필: true });
+    const list = [t({ 이름: '가', 선호사항: text }), t({ 이름: '나', 선호사항: 'ISFP / 9번 / 잘 맞음' })];
+    const f = (p: Partial<SearchFilters>) => searchTeachers(list, { ...EMPTY_FILTERS, mbtiTarget: 'preferred', enneaTarget: 'preferred', ...p }).map((x) => x.key);
+    expect(f({ mbti: 'NT' })).toEqual(['가']); // INTP 한 줄 안에 N·T
+    expect(f({ mbti: 'EP' })).toEqual([]); // E 는 ENFJ, P 는 INTP 줄 — 줄을 섞어 맞추지 않는다
+    expect(f({ ennea: '9' })).toEqual(['가', '나']);
+    expect(f({ ennea: '6', mbti: 'SF' })).toEqual([]);
 });

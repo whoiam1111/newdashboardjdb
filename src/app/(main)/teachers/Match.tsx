@@ -8,15 +8,13 @@ import {
     EMPTY_FILTERS,
     formatTeacherProfile,
     matchTeachers,
+    prefsOf,
     searchTeachers,
     TIME_SLOTS,
     timesOf,
     type SearchFilters,
     type TeacherView,
 } from '@/lib/teachers';
-
-// 교사가 아직 없는 진행 중 학생 (고르면 성별·나이·지역 조건이 채워진다)
-export type Student = { key: string; 이름: string; 성별: string; 생년: string; 지역: string; 현재상태: string };
 
 const PAGE = 36;
 const BUSY = 3; // jdb 와 같은 '담당 많음' 기준
@@ -47,9 +45,8 @@ const Label = ({ children, extra }: { children: React.ReactNode; extra?: React.R
 );
 
 // 교사 매칭 찾기 (jdb 교사 조회와 같은 조건·카드·프로필 복사). 조건을 모두 만족하는 교사만, 맞는 정도 순으로
-export default function MatchFinder({ teachers, students, onOpen }: { teachers: TeacherView[]; students: Student[]; onOpen: (t: TeacherView) => void }) {
+export default function MatchFinder({ teachers, onOpen }: { teachers: TeacherView[]; onOpen: (t: TeacherView) => void }) {
     const [f, setF] = useState<SearchFilters>(EMPTY_FILTERS);
-    const [student, setStudent] = useState<Student | null>(null);
     const [limit, setLimit] = useState(PAGE);
     const [msg, holder] = message.useMessage();
     const set = <K extends keyof SearchFilters>(k: K, v: SearchFilters[K]) => {
@@ -63,33 +60,8 @@ export default function MatchFinder({ teachers, students, onOpen }: { teachers: 
         return [...n];
     }, [teachers]);
 
-    // 조건으로 거르고, 학생(또는 조건)과 맞는 정도 순으로 줄 세운다
-    const results = useMemo(
-        () =>
-            matchTeachers(searchTeachers(teachers, f), {
-                성별: f.성별 || student?.성별,
-                지역: f.지역 || student?.지역,
-                나이: student?.생년,
-                키워드: f.q,
-            }),
-        [teachers, f, student],
-    );
-
-    const pickStudent = (key?: string) => {
-        const s = students.find((x) => x.key === key) ?? null;
-        setStudent(s);
-        setLimit(PAGE);
-        if (!s) return;
-        const a = ageOf(s.생년);
-        const sex = s.성별.trim().slice(0, 1);
-        setF((p) => ({
-            ...p,
-            성별: sex === '남' || sex === '여' ? sex : '',
-            지역: regions.some(([r]) => r === s.지역) ? s.지역 : '',
-            ageMin: a ? String(a - 5) : '',
-            ageMax: a ? String(a + 5) : '',
-        }));
-    };
+    // 조건으로 거르고, 등급·담당 수 등으로 맞는 정도 순으로 줄 세운다
+    const results = useMemo(() => matchTeachers(searchTeachers(teachers, f), { 성별: f.성별, 지역: f.지역, 키워드: f.q }), [teachers, f]);
 
     const copyOne = async (t: TeacherView) => {
         if (await copyText(formatTeacherProfile(t.row))) msg.success(`${t.row.이름} 프로필을 복사했습니다.`);
@@ -101,7 +73,7 @@ export default function MatchFinder({ teachers, students, onOpen }: { teachers: 
         else msg.error('복사하지 못했습니다.');
     };
 
-    const active = [f.q.trim(), f.지역, f.성별, f.교사형태, f.times.length, f.ageMin || f.ageMax, f.mbti.trim(), f.ennea, student].filter(Boolean).length;
+    const active = [f.q.trim(), f.지역, f.성별, f.교사형태, f.times.length, f.ageMin || f.ageMax, f.mbti.trim(), f.ennea].filter(Boolean).length;
     const target = (v: 'teacher' | 'preferred', on: (v: 'teacher' | 'preferred') => void) => (
         <Segmented
             size="small"
@@ -120,20 +92,6 @@ export default function MatchFinder({ teachers, students, onOpen }: { teachers: 
             <div className="match">
                 {/* 검색 조건 (넓은 화면에서는 왼쪽에 고정) */}
                 <div className="match-filters">
-                    <div>
-                        <Label>학생 (교사 없는 학생을 고르면 조건이 채워집니다)</Label>
-                        <Select
-                            showSearch
-                            allowClear
-                            placeholder="학생 고르기"
-                            style={{ width: '100%' }}
-                            optionFilterProp="label"
-                            aria-label="학생"
-                            value={student?.key}
-                            onChange={pickStudent}
-                            options={students.map((s) => ({ value: s.key, label: `${s.이름} · ${s.지역} · ${[s.성별, s.생년].filter(Boolean).join(' ')} · ${s.현재상태}` }))}
-                        />
-                    </div>
                     <div>
                         <Label>검색어</Label>
                         <Input allowClear placeholder="이름, 직업, 전공, 자격증, 취미" value={f.q} onChange={(e) => set('q', e.target.value)} aria-label="검색어" />
@@ -207,7 +165,6 @@ export default function MatchFinder({ teachers, students, onOpen }: { teachers: 
                                 size="small"
                                 onClick={() => {
                                     setF(EMPTY_FILTERS);
-                                    setStudent(null);
                                     setLimit(PAGE);
                                 }}
                             >
@@ -222,7 +179,6 @@ export default function MatchFinder({ teachers, students, onOpen }: { teachers: 
                     <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 12 }}>
                         <span style={{ fontWeight: 600, color: 'var(--sub)' }}>
                             <span style={{ color: 'var(--primary)' }}>{results.length}</span>명{results.length > limit && ` 중 ${limit}명 표시`}
-                            {student && <span style={{ fontWeight: 400 }}> · {student.이름} 학생과 맞는 순</span>}
                         </span>
                         {results.length > 0 && (
                             <Button size="small" icon={<CopyOutlined />} onClick={copyAll}>
@@ -234,8 +190,8 @@ export default function MatchFinder({ teachers, students, onOpen }: { teachers: 
                         <Empty description="조건에 맞는 교사가 없습니다. 조건을 줄여 보세요." />
                     ) : (
                         <div className="match-cards">
-                            {results.slice(0, limit).map(({ t, reasons }) => (
-                                <TeacherCard key={t.key} t={t} reasons={student ? reasons : []} picked={f.times} onOpen={() => onOpen(t)} onCopy={() => copyOne(t)} />
+                            {results.slice(0, limit).map(({ t }) => (
+                                <TeacherCard key={t.key} t={t} picked={f.times} onOpen={() => onOpen(t)} onCopy={() => copyOne(t)} />
                             ))}
                             {results.length > limit && (
                                 <Button block style={{ gridColumn: '1 / -1' }} onClick={() => setLimit((l) => l + PAGE)}>
@@ -250,11 +206,12 @@ export default function MatchFinder({ teachers, students, onOpen }: { teachers: 
     );
 }
 
-function TeacherCard({ t, reasons, picked, onOpen, onCopy }: { t: TeacherView; reasons: string[]; picked: string[]; onOpen: () => void; onCopy: () => void }) {
+function TeacherCard({ t, picked, onOpen, onCopy }: { t: TeacherView; picked: string[]; onOpen: () => void; onCopy: () => void }) {
     const r = t.row;
     const male = (r.성별 ?? '').startsWith('남');
     const age = ageOf(r.출생연도);
     const times = timesOf(r.가능시간);
+    const prefs = prefsOf(r.선호사항);
     const details = [
         ['전공', r.전공],
         ['자격', r.자격증],
@@ -308,11 +265,12 @@ function TeacherCard({ t, reasons, picked, onOpen, onCopy }: { t: TeacherView; r
                 {[
                     ['MBTI', r.MBTI],
                     ['에니어', r.에니어그램],
-                    ['선호', r.선호사항],
-                ].map(([label, v]) => (
+                    // 선호는 'ISFP · 9번' 처럼 짧게, 여러 개면 쉼표로. 마우스를 올리면 이유까지 전체
+                    ['선호', prefs.map((p) => [p.mbti, p.ennea && `${p.ennea}번`].filter(Boolean).join(' · ')).filter(Boolean).join(', '), r.선호사항],
+                ].map(([label, v, full]) => (
                     <div key={label} style={{ background: 'var(--soft)', borderRadius: 8, padding: '4px 6px', minWidth: 0 }}>
                         <div style={{ fontSize: 10, color: 'var(--muted)' }}>{label}</div>
-                        <div title={v} style={{ fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <div title={full ?? v} style={{ fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {v || '-'}
                         </div>
                     </div>
@@ -336,9 +294,6 @@ function TeacherCard({ t, reasons, picked, onOpen, onCopy }: { t: TeacherView; r
                         </Tag>
                     ))}
                 </div>
-            )}
-            {reasons.length > 0 && (
-                <div style={{ marginTop: 8, fontSize: 11, color: 'var(--muted)' }}>맞는 점: {reasons.join(' · ')}</div>
             )}
         </div>
     );
