@@ -1,3 +1,4 @@
+import { ymd } from './goals';
 import type { User } from './session';
 
 type Row = Record<string, string>;
@@ -17,10 +18,18 @@ export const DUP_COLS = ['번호', '현재상태', '연락처', '인도자지역
 
 // 이름 + 연락처 뒷4자리가 같은데 인도자 지역이 2곳 이상인 묶음. 연락처가 4자리 미만이면 비교하지 않는다
 // 지역 계정은 묶음 안에 자기 지역 사람이 있을 때만 보고, 그 묶음의 다른 지역 줄도 함께 본다 (중복 확인용)
+// 그 줄의 '...날짜' 칸 중 가장 최근 날짜 (YYYY-MM-DD, 없으면 '')
+const latestDate = (r: Row) =>
+    Object.entries(r)
+        .filter(([k]) => k.endsWith('날짜'))
+        .map(([, v]) => ymd(v))
+        .reduce((a, b) => (b > a ? b : a), '');
+
+// 같은 이름+뒷4자리가 다른 지역에 있는 묶음. 최근 날짜 순 (묶음도, 묶음 안 줄도)
+// includeDropped 가 false 면 진행 중인 줄이 하나라도 있는 묶음만 (그 묶음의 탈락 줄도 함께 보여준다)
 export function findDuplicates(records: Row[], user: User, includeDropped: boolean) {
     const groups = new Map<string, Row[]>();
     for (const r of records) {
-        if (!includeDropped && isDropped(r)) continue;
         const name = (r.이름 ?? '').trim();
         const phone = (r.연락처 ?? '').replace(/\D/g, '').slice(-4);
         if (!name || phone.length < 4) continue;
@@ -28,20 +37,30 @@ export function findDuplicates(records: Row[], user: User, includeDropped: boole
         groups.set(key, [...(groups.get(key) ?? []), r]);
     }
     return [...groups]
-        .filter(([, rows]) => new Set(rows.map((r) => r.인도자지역 || '(없음)')).size >= 2 && rows.some((r) => inScope(r, user)))
-        .map(([key, rows]) => ({
+        .filter(
+            ([, rows]) =>
+                new Set(rows.map((r) => r.인도자지역 || '(없음)')).size >= 2 &&
+                rows.some((r) => inScope(r, user)) &&
+                (includeDropped || rows.some((r) => !isDropped(r))),
+        )
+        .map(([key, all]) => {
+            const rows = all.map((r) => ({ r, d: latestDate(r) })).sort((a, b) => b.d.localeCompare(a.d)).map((x) => x.r);
+            return { key, rows, 최근날짜: latestDate(rows[0]) };
+        })
+        .map(({ key, rows, 최근날짜 }) => ({
             key,
             이름: key.split('|')[0],
             연락처: key.split('|')[1],
+            최근날짜,
             지역: [...new Set(rows.map((r) => r.인도자지역 || '(없음)'))],
             // 내 범위 밖 줄의 연락처는 뒤 4자리만 (비교에는 그것만 필요)
             rows: rows.map((r) => {
-                const row = Object.fromEntries(DUP_COLS.map((c) => [c, r[c] ?? '']));
+                const row: Record<string, string> = { ...Object.fromEntries(DUP_COLS.map((c) => [c, r[c] ?? ''])), 최근날짜: latestDate(r) };
                 if (!inScope(r, user)) row.연락처 = row.연락처.replace(/\d(?=(?:\D*\d){4})/g, '*');
                 return row;
             }),
         }))
-        .sort((a, b) => a.이름.localeCompare(b.이름, 'ko'));
+        .sort((a, b) => b.최근날짜.localeCompare(a.최근날짜) || a.이름.localeCompare(b.이름, 'ko'));
 }
 export type DupGroup = ReturnType<typeof findDuplicates>[number];
 

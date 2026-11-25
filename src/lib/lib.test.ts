@@ -1,7 +1,7 @@
 import { expect, test, vi } from 'vitest';
 import { readSheet, toRecords } from './sheet';
 import { computeGoals, currentCampaign, parseCampaigns } from './goals';
-import { ageOf, buildTeachers, compareRegions, groupsOf, matchTeachers } from './teachers';
+import { ageOf, buildTeachers, compareRegions, EMPTY_FILTERS, formatTeacherProfile, groupsOf, matchTeachers, prefsOf, searchTeachers, type SearchFilters } from './teachers';
 import { signSession, verifySession } from './session';
 import { authenticate, hashPassword, lockedMinutes, newPasswordError, recordLogin, sheetStore, verifyHash, type Store, type Stored } from './accounts';
 import { findDuplicates, forUser, isDropped, summarize } from './dashboard';
@@ -125,16 +125,29 @@ test('findDuplicates / isDropped: 다른 지역 이름+뒷4자리, 지역 계정
         { 번호: '8', 현재상태: '발', 이름: '최', 연락처: '4444', 인도자지역: '중랑' },
         { 번호: '9', 현재상태: '합탈', 이름: '최', 연락처: '4444', 인도자지역: '강북' },
     ];
+    rows.push(
+        { 번호: '10', 현재상태: '탈', 이름: '정', 연락처: '5555', 인도자지역: '도봉', 발굴탈락날짜: '2026-10-01' },
+        { 번호: '11', 현재상태: '찾탈', 이름: '정', 연락처: '5555', 인도자지역: '노원' }, // 둘 다 탈락
+    );
+    Object.assign(rows[0], { 발굴등록날짜: '2026-09-01' });
+    Object.assign(rows[1], { 찾기날짜: '2026. 11. 20' });
+    Object.assign(rows[2], { 발굴탈락날짜: '2026-10-05' });
+    Object.assign(rows[7], { 발굴등록날짜: '2026-11-25' });
     const admin = { id: 'jdb', region: null, mustChange: false };
     expect(isDropped(rows[6])).toBe(true);
-    expect(findDuplicates(rows, admin, false).map((g) => [g.이름, g.rows.length])).toEqual([['김철수', 2]]);
-    expect(findDuplicates(rows, admin, true).map((g) => [g.이름, g.rows.length])).toEqual([['김철수', 3], ['최', 2]]);
+    // 진행 중인 줄이 하나라도 있으면 탈락 줄도 함께, 최근 날짜 순 (묶음·줄 모두)
+    const cur = findDuplicates(rows, admin, false);
+    expect(cur.map((g) => [g.이름, g.최근날짜, g.rows.map((r) => r.번호)])).toEqual([
+        ['최', '2026-11-25', ['8', '9']],
+        ['김철수', '2026-11-20', ['2', '3', '1']],
+    ]);
+    expect(findDuplicates(rows, admin, true).map((g) => g.이름)).toEqual(['최', '김철수', '정']);
     const sb = { id: '성북', region: '성북', mustChange: false };
-    expect(findDuplicates(rows, sb, false)).toEqual([]);
-    expect(findDuplicates(rows, sb, true)[0].지역).toEqual(['도봉', '노원', '성북']);
+    expect(findDuplicates(rows, sb, false).map((g) => g.이름)).toEqual(['김철수']); // 성북은 탈락 줄이지만 같은 묶음에 진행 중이 있음
+    expect(findDuplicates(rows, sb, true)[0].지역).toEqual(['노원', '성북', '도봉']);
     // 성북 계정에게 도봉 줄 연락처는 뒤 4자리만, 관리자는 전체
-    expect(findDuplicates(rows, sb, true)[0].rows[0].연락처).toBe('***-****-2222');
-    expect(findDuplicates(rows, admin, true)[0].rows[0].연락처).toBe('010-1111-2222');
+    expect(findDuplicates(rows, sb, true)[0].rows[2].연락처).toBe('***-****-2222');
+    expect(cur[1].rows[2].연락처).toBe('010-1111-2222');
 });
 
 test('목표 달성: 개강 기간, 발·찾 발굴 주차, 0.5점 나눔, 목표 × 배수, 목표월', () => {
@@ -217,4 +230,44 @@ test('groupsOf / compareRegions: MBTI E·I, 에니어그램 유형, 성별, 나�
     const t = (row: Record<string, string>) => ({ key: row.이름, row, 담당: [], 활동: false, 프로필: true });
     const rows = compareRegions([t({ 이름: 'a', 지역: '도봉', MBTI: 'E', 성별: '남' }), t({ 이름: 'b', 지역: '도봉', MBTI: 'I' }), t({ 이름: 'c', 지역: '노원', MBTI: 'E' })], 2026);
     expect(rows.map((r) => [r.region, r.교사, r.E, r.I, r.남])).toEqual([['도봉', 2, 1, 1, 1], ['노원', 1, 1, 0, 0], ['합계', 3, 2, 1, 1]]);
+});
+
+test('searchTeachers / formatTeacherProfile: jdb 교사 조회 조건과 양식', () => {
+    const t = (row: Record<string, string>) => ({ key: row.이름, row, 담당: [], 활동: false, 프로필: true });
+    const list = [
+        t({ 이름: '가', 지역: '도봉', 성별: '남', 교사형태: '정교사', 출생연도: '1998', MBTI: 'ENFP', 에니어그램: '4w5', 가능시간: '평일저녁, 주말 오후', 직업: '디자이너', 선호사항: 'INTJ 5번' }),
+        t({ 이름: '나', 지역: '노원', 성별: '여자', 교사형태: '교사', 출생연도: '1985', MBTI: 'ISTJ', 에니어그램: '1', 가능시간: '주말 오전' }),
+    ];
+    const f = (p: Partial<SearchFilters>) => searchTeachers(list, { ...EMPTY_FILTERS, ...p }, 2026).map((x) => x.key);
+    expect(f({})).toEqual(['가', '나']);
+    expect(f({ q: '디자' })).toEqual(['가']);
+    expect(f({ 성별: '여' })).toEqual(['나']);
+    expect(f({ times: ['평일 저녁', '주말 오후'] })).toEqual(['가']);
+    expect(f({ times: ['평일 저녁', '주말 오전'] })).toEqual([]);
+    expect(f({ ageMin: '25', ageMax: '30' })).toEqual(['가']);
+    expect(f({ mbti: 'nf' })).toEqual(['가']);
+    expect(f({ mbti: 'NT', mbtiTarget: 'preferred' })).toEqual(['가']);
+    expect(f({ ennea: '4' })).toEqual(['가']);
+    expect(f({ ennea: '5', enneaTarget: 'preferred' })).toEqual(['가']);
+    expect(formatTeacherProfile({ 이름: '가', 성별: '남', 출생연도: '1998', 종교: '기독교,장로', 신앙연수: '3', 직업: '디자이너', 가능시간: '주말오후,평일 저녁' }, 2026)).toContain(
+        '▪️이름/성별/나이: 가/남/28',
+    );
+    expect(formatTeacherProfile({ 이름: '가', 종교: '기독교,장로', 신앙연수: '3', 가능시간: '주말오후,평일 저녁' }, 2026)).toMatch(/기독교\(장로\)\/3년[\s\S]*만남가능 일시: 평일 저녁, 주말 오후/);
+});
+
+test('prefsOf / 선호 검색: 시트 선호사항 칸 (줄마다 MBTI / N번 / 이유)', () => {
+    const text = 'ENFJ / 1번 / 대화가 잘 통함\n 9번 / 편안함\n INTP / 6번 / 차분함';
+    expect(prefsOf(text)).toEqual([
+        { mbti: 'ENFJ', ennea: '1', reason: '대화가 잘 통함' },
+        { mbti: '', ennea: '9', reason: '편안함' },
+        { mbti: 'INTP', ennea: '6', reason: '차분함' },
+    ]);
+    expect(prefsOf('2번 / 이유')).toEqual([{ mbti: '', ennea: '2', reason: '이유' }]);
+    const t = (row: Record<string, string>) => ({ key: row.이름, row, 담당: [], 활동: false, 프로필: true });
+    const list = [t({ 이름: '가', 선호사항: text }), t({ 이름: '나', 선호사항: 'ISFP / 9번 / 잘 맞음' })];
+    const f = (p: Partial<SearchFilters>) => searchTeachers(list, { ...EMPTY_FILTERS, mbtiTarget: 'preferred', enneaTarget: 'preferred', ...p }).map((x) => x.key);
+    expect(f({ mbti: 'NT' })).toEqual(['가']); // INTP 한 줄 안에 N·T
+    expect(f({ mbti: 'EP' })).toEqual([]); // E 는 ENFJ, P 는 INTP 줄 — 줄을 섞어 맞추지 않는다
+    expect(f({ ennea: '9' })).toEqual(['가', '나']);
+    expect(f({ ennea: '6', mbti: 'SF' })).toEqual([]);
 });
