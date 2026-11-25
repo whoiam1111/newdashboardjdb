@@ -1,7 +1,7 @@
 import { expect, test, vi } from 'vitest';
 import { readSheet, toRecords } from './sheet';
 import { computeGoals, currentCampaign, parseCampaigns } from './goals';
-import { ageOf, buildTeachers, matchTeachers } from './teachers';
+import { ageOf, buildTeachers, compareRegions, groupsOf, matchTeachers } from './teachers';
 import { signSession, verifySession } from './session';
 import { authenticate, hashPassword, lockedMinutes, newPasswordError, recordLogin, sheetStore, verifyHash, type Store, type Stored } from './accounts';
 import { findDuplicates, forUser, isDropped, summarize } from './dashboard';
@@ -208,4 +208,13 @@ test('ageOf / matchTeachers: 성별·나이·지역·등급·담당·키워드 �
     expect(res.map((m) => m.t.key)).toEqual(['a', 'c', 'b']);
     expect(res[0].reasons).toEqual(['같은 성별', '같은 지역', '나이 비슷 (±3)', '등급 상', '정교사', '담당 없음', "'주말'"]);
     expect(matchTeachers(list, { 성별: '남', 같은성별만: true }, 2026).map((m) => m.t.key)).toEqual(['a', 'c']);
+});
+
+test('groupsOf / compareRegions: MBTI E·I, 에니어그램 유형, 성별, 나이대', () => {
+    expect(groupsOf({ MBTI: 'enfp', 에니어그램: '4w5', 성별: '여자', 출생연도: '2004' }, 2026)).toEqual({ MBTI: 'E', 에니어그램: '가슴형', 성별: '여', 나이: '20대초' });
+    expect(groupsOf({ MBTI: 'ISTJ', 에니어그램: '1번', 출생연도: '1991' }, 2026)).toEqual({ MBTI: 'I', 에니어그램: '장형', 성별: '', 나이: '30대중' });
+    expect(groupsOf({ 에니어그램: '머리형', 출생연도: '20대후' }, 2026)).toMatchObject({ 에니어그램: '머리형', 나이: '20대후', MBTI: '' });
+    const t = (row: Record<string, string>) => ({ key: row.이름, row, 담당: [], 활동: false, 프로필: true });
+    const rows = compareRegions([t({ 이름: 'a', 지역: '도봉', MBTI: 'E', 성별: '남' }), t({ 이름: 'b', 지역: '도봉', MBTI: 'I' }), t({ 이름: 'c', 지역: '노원', MBTI: 'E' })], 2026);
+    expect(rows.map((r) => [r.region, r.교사, r.E, r.I, r.남])).toEqual([['도봉', 2, 1, 1, 1], ['노원', 1, 1, 0, 0], ['합계', 3, 2, 1, 1]]);
 });

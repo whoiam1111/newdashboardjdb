@@ -1,10 +1,10 @@
 'use client';
 import { useMemo, useState } from 'react';
 import { Alert, Button, Card, Descriptions, Drawer, Empty, Input, Space, Switch, Table, Tag } from 'antd';
-import { IdcardOutlined, PieChartOutlined, SearchOutlined } from '@ant-design/icons';
+import { IdcardOutlined, PieChartOutlined, SearchOutlined, TableOutlined } from '@ant-design/icons';
 import { CardTitle } from '../../ui';
 import type { ColumnsType } from 'antd/es/table';
-import { PROFILE_COLS, type TeacherView } from '@/lib/teachers';
+import { COMPARE, compareRegions, PROFILE_COLS, type TeacherView } from '@/lib/teachers';
 import MatchFinder, { type Student } from './Match';
 
 const GRADES = ['상', '중', '하'];
@@ -153,7 +153,14 @@ export default function Teachers({ teachers, duplicates, students }: { teachers:
                 </Tag>
             ),
         },
-        { title: '평가항목', dataIndex: ['row', '평가항목'] },
+        // 긴 평가 내용은 한 줄로 자르고, 마우스를 올리면 전체가 보인다 (전체는 프로필 창에도 있음)
+        {
+            title: '평가항목',
+            dataIndex: ['row', '평가항목'],
+            width: 180,
+            ellipsis: { showTitle: false },
+            render: (v: string) => <span title={v}>{v}</span>,
+        },
         {
             title: '담당 학생',
             render: (_, t) => t.담당.length,
@@ -210,6 +217,33 @@ export default function Teachers({ teachers, duplicates, students }: { teachers:
                         ...['교사', '상', '중', '하', '활동', '프로필'].map((c) => ({ title: c, dataIndex: c, align: 'right' as const })),
                     ]}
                 />
+            </Card>
+            <Card title={<CardTitle icon={<TableOutlined />}>지역별 교사 비교</CardTitle>}>
+                <Table
+                    rowKey="region"
+                    size="small"
+                    bordered
+                    pagination={false}
+                    scroll={{ x: 'max-content' }}
+                    dataSource={compareRegions(teachers)}
+                    onRow={(r) => (r.region === '합계' ? { style: { fontWeight: 600, background: 'var(--soft, #f5f7fa)' } } : {})}
+                    columns={[
+                        { title: '지역', dataIndex: 'region', fixed: 'left' },
+                        { title: '교사', dataIndex: '교사', align: 'right' },
+                        ...Object.entries(COMPARE).map(([group, vals]) => ({
+                            title: group,
+                            children: vals.map((v) => ({
+                                title: v,
+                                dataIndex: v,
+                                align: 'right' as const,
+                                render: (n: number) => n || <span style={{ color: 'var(--muted)' }}>0</span>,
+                            })),
+                        })),
+                    ]}
+                />
+                <div style={{ color: 'var(--muted)', fontSize: 12, marginTop: 8 }}>
+                    교사 탭의 MBTI·에니어그램·성별·출생연도 칸으로 셉니다. 값이 없거나 범위 밖(40대 이상 등)인 교사는 그 칸에 세지 않아 합이 교사 수보다 작을 수 있습니다. 에니어그램: 가슴형 2·3·4번, 머리형 5·6·7번, 장형 8·9·1번.
+                </div>
             </Card>
             <MatchFinder teachers={teachers} students={students} onOpen={setOpen} />
             <Card
