@@ -1,0 +1,303 @@
+/* 참고: AlignUI 대시보드 스타일 (흰 바탕, 연회색 테두리 카드, 보라 포인트) */
+:root {
+    --primary: #7d52f4;
+    --primary-soft: #f2eeff;
+    --text: #0e121b;
+    --sub: #525866;
+    --muted: #99a0ae;
+    --border: #ebebeb;
+    --soft: #f5f7fa;
+}
+
+body {
+    margin: 0;
+    color: var(--text);
+    background: #fff;
+    font-family: 'Pretendard Variable', Pretendard, Inter, -apple-system, 'Segoe UI', sans-serif;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ── 틀: 왼쪽 사이드바 + 본문 ── */
+.app {
+    display: flex;
+    min-height: 100vh;
+}
+.sidebar {
+    width: 232px;
+    flex-shrink: 0;
+    box-sizing: border-box;
+    height: 100vh;
+    position: sticky;
+    top: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 20px 16px;
+    border-right: 1px solid var(--border);
+    background: #fff;
+}
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 8px 20px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 16px;
+    font-weight: 600;
+}
+.brand-mark {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: var(--primary);
+    color: #fff;
+    font-size: 18px;
+}
+.nav-label {
+    padding: 12px 12px 6px;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+}
+.nav-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    border: 0;
+    border-radius: 10px;
+    background: none;
+    color: var(--sub);
+    font: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+}
+.nav-item .anticon {
+    font-size: 18px;
+}
+.nav-item:hover,
+.nav-item.active {
+    background: var(--soft);
+    color: var(--text);
+}
+.nav-item.active .anticon {
+    color: var(--primary);
+}
+.nav-item.active::before {
+    content: '';
+    position: absolute;
+    left: -16px;
+    top: 8px;
+    bottom: 8px;
+    width: 4px;
+    border-radius: 0 4px 4px 0;
+    background: var(--primary);
+}
+.nav-item:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 1px;
+}
+.nav-spacer {
+    flex: 1;
+}
+.user-chip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 8px;
+    padding: 12px 8px 0;
+    border-top: 1px solid var(--border);
+}
+.content {
+    flex: 1;
+    min-width: 0;
+    padding: 28px 32px 40px;
+}
+
+/* ── 본문 머리: 아바타 + 이름 + 인사 ── */
+.page-head {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 24px;
+}
+.page-head h1 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+}
+.page-head p {
+    margin: 2px 0 0;
+    color: var(--sub);
+    font-size: 14px;
+}
+.avatar {
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: var(--primary-soft);
+    color: var(--primary);
+    font-weight: 600;
+}
+.avatar.sm {
+    width: 32px;
+    height: 32px;
+    font-size: 13px;
+}
+
+/* ── 카드 머리: 선 아이콘 + 제목 ── */
+.card-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+}
+.card-title .anticon {
+    font-size: 18px;
+    color: var(--sub);
+}
+.hint {
+    margin: 0 0 16px;
+    color: var(--sub);
+    font-size: 13px;
+}
+.stack {
+    display: grid;
+    gap: 20px;
+}
+
+/* ── 숫자 타일 ── */
+.tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(120px, 100%), 1fr));
+    gap: 12px;
+}
+.tiles.two {
+    grid-template-columns: repeat(2, 1fr);
+}
+.tiles.wide {
+    grid-template-columns: repeat(auto-fill, minmax(min(140px, 100%), 1fr));
+}
+.tile {
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+}
+.tile-label {
+    font-size: 13px;
+    color: var(--sub);
+}
+.tile-value {
+    margin-top: 4px;
+    font-size: 26px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+}
+.tile-value small {
+    margin-left: 4px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--muted);
+}
+
+/* ── 로그인·비밀번호 화면 ── */
+.auth {
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    padding: 16px;
+    background: var(--soft);
+}
+.auth-card {
+    width: 100%;
+    max-width: 380px;
+}
+.auth-head {
+    display: grid;
+    justify-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+    text-align: center;
+}
+.auth-head h1 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+}
+.auth-head p {
+    margin: 0;
+    color: var(--sub);
+    font-size: 14px;
+}
+
+/* ── 좁은 화면: 사이드바를 위쪽 가로 메뉴로 ── */
+@media (max-width: 860px) {
+    .app {
+        flex-direction: column;
+    }
+    .sidebar {
+        width: auto;
+        height: auto;
+        position: sticky;
+        z-index: 10;
+        flex-direction: row;
+        align-items: center;
+        overflow-x: auto;
+        padding: 10px 12px;
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
+    }
+    .brand {
+        padding: 0 8px 0 0;
+        margin: 0;
+        border: 0;
+    }
+    .brand > span:last-child,
+    .nav-label,
+    .nav-spacer,
+    .user-chip {
+        display: none;
+    }
+    .nav-item {
+        white-space: nowrap;
+    }
+    .nav-item.active::before {
+        display: none;
+    }
+    .content {
+        padding: 16px;
+    }
+}
+
+.grid-2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr));
+    gap: 20px;
+}
+.lead {
+    margin: 0 0 16px;
+    color: var(--sub);
+    font-size: 15px;
+}
+.lead strong {
+    color: var(--text);
+    font-size: 20px;
+    font-weight: 600;
+}
+/* 넓은 표가 틀(grid) 폭을 늘리지 않게: 표는 카드 안에서 가로 스크롤 */
+.stack > *,
+.grid-2 > * {
+    min-width: 0;
+}

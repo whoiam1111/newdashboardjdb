@@ -1,0 +1,10 @@
+node_modules
+.next
+.env*
+!.env.example
+next-env.d.ts
+*.tsbuildinfo
+
+# 개인정보가 든 내보내기 파일
+*.xlsx
+*.csv
