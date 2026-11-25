@@ -24,7 +24,7 @@ function SetPassword({ id }: { id: string }) {
 export default function AccountsTable({ rows }: { rows: Row[] }) {
     return (
         <Card title={<CardTitle icon={<KeyOutlined />}>지역 계정 비밀번호</CardTitle>}>
-            <p className="hint">처음 비밀번호(jdb1234)를 쓰는 계정은 첫 로그인 때 비밀번호를 바꿔야 합니다.</p>
+            <p className="hint">처음 비밀번호를 쓰는 계정은 첫 로그인 때 비밀번호를 바꿔야 합니다.</p>
             <Table
                 rowKey="id"
                 size="small"

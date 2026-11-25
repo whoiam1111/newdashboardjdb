@@ -21,7 +21,9 @@ export async function login(_: string | null, form: FormData) {
     try {
         user = await authenticate(id, String(form.get('password') ?? ''));
     } catch (e) {
-        return (e as Error).message;
+        // 로그인 전 사용자에게는 내부 설정·오류 내용을 보여주지 않는다
+        console.error('login:', (e as Error).message);
+        return '지금은 로그인할 수 없습니다. 관리자에게 문의해주세요.';
     }
     recordLogin(id, !!user);
     if (!user) return '아이디 또는 비밀번호가 올바르지 않습니다.';

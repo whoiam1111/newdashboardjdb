@@ -30,18 +30,22 @@ test('session: 계정·지역·첫 비밀번호 표시가 그대로 돌아온다
     expect(await verifySession(undefined)).toBe(null);
 });
 
-test('authenticate: 처음엔 jdb1234 + 변경 필요, 바꾼 뒤엔 새 비번만', async () => {
+test('authenticate: 처음엔 INITIAL_PASSWORD + 변경 필요, 바꾼 뒤엔 새 비번만', async () => {
+    process.env.INITIAL_PASSWORD = 'jdb1234';
     const saved: Stored[] = [];
     const store: Store = {
         list: async () => saved,
         set: async (id, hash) => void saved.push({ id, hash, updatedAt: 'now' }),
     };
-    expect(await authenticate('도봉', 'jdb1234', store)).toEqual({ id: '도봉', region: '도봉', mustChange: true });
-    expect(await authenticate('jdb', 'jdb1234', store)).toEqual({ id: 'jdb', region: null, mustChange: true });
+    expect(await authenticate('도봉', 'jdb1234', store)).toBe(null); // 8자 미만 처음 비밀번호는 무시
+    process.env.INITIAL_PASSWORD = 'init-pass-1234';
+    expect(await authenticate('도봉', 'jdb1234', store)).toBe(null); // 예전 공개 비밀번호
+    expect(await authenticate('도봉', 'init-pass-1234', store)).toEqual({ id: '도봉', region: '도봉', mustChange: true });
+    expect(await authenticate('jdb', 'init-pass-1234', store)).toEqual({ id: 'jdb', region: null, mustChange: true });
     expect(await authenticate('도봉', 'wrong', store)).toBe(null);
-    expect(await authenticate('admin', 'jdb1234', store)).toBe(null); // 목록에 없는 아이디
+    expect(await authenticate('admin', 'init-pass-1234', store)).toBe(null); // 목록에 없는 아이디
     await store.set('도봉', hashPassword('새비밀번호123'));
-    expect(await authenticate('도봉', 'jdb1234', store)).toBe(null);
+    expect(await authenticate('도봉', 'init-pass-1234', store)).toBe(null);
     expect(await authenticate(' 도봉 ', '새비밀번호123', store)).toEqual({ id: '도봉', region: '도봉', mustChange: false });
     expect(verifyHash('x', 'garbage')).toBe(false);
 });
@@ -50,7 +54,10 @@ test('newPasswordError / 로그인 잠금', () => {
     expect(newPasswordError('short', 'short')).toMatch('8자');
     expect(newPasswordError('jdb1234', 'jdb1234')).toMatch('8자');
     expect(newPasswordError('abcdefgh', 'abcdefgX')).toMatch('다릅니다');
+    expect(newPasswordError('init-pass-1234', 'init-pass-1234')).toMatch('처음 비밀번호');
     expect(newPasswordError('abcdefgh', 'abcdefgh')).toBe(null);
+    recordLogin('없는아이디', false, 0);
+    expect(lockedMinutes('없는아이디', 1000)).toBe(0);
     for (let i = 0; i < 5; i++) recordLogin('성북', false, 0);
     expect(lockedMinutes('성북', 1000)).toBe(10);
     expect(lockedMinutes('성북', 11 * 60_000)).toBe(0);
@@ -98,7 +105,7 @@ test('sheetStore: 예전 배포(계정 목록 없음·저장 미지원)면 jdb12
         .mockResolvedValueOnce(new Response(JSON.stringify({ title: '전체명단', values: [] })))
         .mockResolvedValueOnce(new Response('<html>Script function not found: doPost</html>'));
     vi.stubGlobal('fetch', fetchMock);
-    await expect(authenticate('도봉', 'jdb1234')).rejects.toThrow('예전 버전');
+    await expect(authenticate('도봉', 'init-pass-1234')).rejects.toThrow('예전 버전');
     await expect(sheetStore.set('도봉', 'scrypt$a$b')).rejects.toThrow('JSON 이 아닌 응답');
     vi.unstubAllGlobals();
 });

@@ -10,6 +10,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
             theme={{
                 token: {
                     colorPrimary: '#7d52f4',
+                    colorLink: '#7d52f4',
                     colorText: '#0e121b',
                     colorTextSecondary: '#525866',
                     colorTextTertiary: '#99a0ae',

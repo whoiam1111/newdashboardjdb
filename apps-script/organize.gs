@@ -11,7 +11,7 @@
 //   전체명단: 한 사람당 한 줄로 누적되는 결과. 번호는 발 등록 순서대로 1, 2, 3 …
 //
 // 양식 (맨 앞 단계로 구분)
-//   발/이름/연락처/생년/성별/인도자지역/인도자팀/인도자이름/도구          → 전체명단에 새로 등록
+//   발/이름/연락처/인도자지역/인도자팀/인도자이름/생년/성별/도구          → 전체명단에 새로 등록
 //   찾기/이름/전화번호(뒷4자리)/성별/생년/발굴유형/인도자이름/고유번호    → 이름+뒷4자리로 찾아 갱신 (고유번호 = 인도자 고유번호)
 //   합/이름/인도자지역/인도자이름/교사지역/교사이름/신앙유형             → 이름+인도자이름으로 찾아 갱신
 //   섭|복|예정|가능|확정/이름/인도자지역/인도자이름/교사지역/교사이름      → 이름+인도자이름으로 찾아 갱신
@@ -32,7 +32,7 @@ const GOALS_TAB = '목표';
 const TEACHERS_TAB = '교사';
 
 const FORMS = {
-    발: ['단계', '이름', '연락처', '생년', '성별', '인도자지역', '인도자팀', '인도자이름', '도구'],
+    발: ['단계', '이름', '연락처', '인도자지역', '인도자팀', '인도자이름', '생년', '성별', '도구'],
     찾기: ['단계', '이름', '연락처', '성별', '생년', '발굴유형', '인도자이름', '인도자고유번호'],
     합: ['단계', '이름', '인도자지역', '인도자이름', '교사지역', '교사이름', '신앙유형'],
     교사단계: ['단계', '이름', '인도자지역', '인도자이름', '교사지역', '교사이름'],
@@ -138,7 +138,7 @@ function setupSheet() {
 
 const GUIDE = [
     ['양식 (발굴등록 탭 A열에 한 줄씩 붙여넣기)', '23시에 하는 일'],
-    ['발/이름/연락처/생년/성별/인도자지역/인도자팀/인도자이름/도구', '전체명단에 새로 등록'],
+    ['발/이름/연락처/인도자지역/인도자팀/인도자이름/생년/성별/도구', '전체명단에 새로 등록'],
     [
         '찾기/이름/전화번호(뒷4자리)/성별/생년/발굴유형/인도자이름/고유번호',
         '이름+뒷4자리로 찾아 현재상태 찾 (고유번호 = 인도자 고유번호)',
@@ -151,9 +151,15 @@ const GUIDE = [
     ['명단 탭', '인도자·교사 목록 (고유번호/지역/팀/이름). 인도자·교사 고유번호는 여기서 찾는다'],
     ['전체명단 탭', '한 사람당 한 줄로 누적되는 결과. 직접 고치지 말고 양식으로 갱신'],
     ['현재명단 탭', '전체명단에서 탈락(탈·찾탈·합탈·복탈) 뺀 명단. 23시마다 새로 쓰니 직접 고치지 않는다'],
-    ['개강설정 탭', '개강월(2026-12)마다 1주차시작일·주차수·단계 배수. 발·찾은 발굴 주차(주차수-5)까지, 합 이후는 개강 끝까지 실적'],
+    [
+        '개강설정 탭',
+        '개강월(2026-12)마다 1주차시작일·주차수·단계 배수. 발·찾은 발굴 주차(주차수-5)까지, 합 이후는 개강 끝까지 실적',
+    ],
     ['목표 탭', '개강월·지역·팀마다 예정목표 점수. 단계 목표 = 예정목표 × 배수 (jdb 와 같음)'],
-    ['교사 탭', '교사 한 명당 한 줄: 교사 관리(교사형태) · 상중하 평가(등급·평가항목·평가일) · 교사 프로필. 담당 학생·활동여부는 웹에서 전체명단으로 계산'],
+    [
+        '교사 탭',
+        '교사 한 명당 한 줄: 교사 관리(교사형태) · 상중하 평가(등급·평가항목·평가일) · 교사 프로필. 담당 학생·활동여부는 웹에서 전체명단으로 계산',
+    ],
     ['처리결과 칸', "'완료 날짜' 또는 '오류: 사유'. 오류 줄은 고쳐 두면 다음 날 다시 처리"],
 ];
 
@@ -247,11 +253,20 @@ function planWrites_(rowNums, idx, lastRow) {
 
 // 전체명단에서 바뀐 줄·새 줄만 쓴다 (3만 줄을 통째로 쓰면 구글이 '알 수 없는 오류'를 낸다)
 function writeChanged_(sh, table, before) {
-    const idx = table.rows.map((o, i) => i).filter((i) => i >= before.length || JSON.stringify(table.rows[i]) !== before[i]);
+    const idx = table.rows
+        .map((o, i) => i)
+        .filter((i) => i >= before.length || JSON.stringify(table.rows[i]) !== before[i]);
     const batches = planWrites_(table.rowNums, idx, sh.getLastRow());
     const lastNeeded = Math.max(0, ...batches.map((b) => b.start + b.idx.length - 1));
     if (lastNeeded > sh.getMaxRows()) sh.insertRowsAfter(sh.getMaxRows(), lastNeeded - sh.getMaxRows());
-    batches.forEach((b) => writeRows_(sh, b.start, table.headers, b.idx.map((i) => table.rows[i])));
+    batches.forEach((b) =>
+        writeRows_(
+            sh,
+            b.start,
+            table.headers,
+            b.idx.map((i) => table.rows[i]),
+        ),
+    );
     return idx.length;
 }
 
@@ -427,7 +442,10 @@ function testOrganize() {
     const [old, lee, kim, again] = students;
     const errs = results.filter((r) => r.text.startsWith('오류')).map((r) => r.i);
     const ok =
-        students.length === 4 && old.현재상태 === '탈' && again.현재상태 === '발' && again.번호 === '8' &&
+        students.length === 4 &&
+        old.현재상태 === '탈' &&
+        again.현재상태 === '발' &&
+        again.번호 === '8' &&
         lee.현재상태 === '복탈' &&
         lee.인도자고유번호 === '7' &&
         lee.인도자팀 === '2-1' &&
@@ -453,16 +471,27 @@ function testOrganize() {
 // 현재명단 탭: 전체명단에서 탈락 계열을 뺀 줄
 function writeCurrent_(ss, { headers, labels, rows }) {
     const sh = ss.getSheetByName(CURRENT) || ss.insertSheet(CURRENT);
-    if (sh.getMaxColumns() < headers.length) sh.insertColumnsAfter(sh.getMaxColumns(), headers.length - sh.getMaxColumns());
+    if (sh.getMaxColumns() < headers.length)
+        sh.insertColumnsAfter(sh.getMaxColumns(), headers.length - sh.getMaxColumns());
     sh.clearContents();
     sh.getRange(1, 1, 1, headers.length).setValues([labels]).setFontWeight('bold');
     sh.setFrozenRows(1);
-    writeRows_(sh, 2, headers, rows.filter((r) => !/탈/.test(r.현재상태 ?? '')));
+    writeRows_(
+        sh,
+        2,
+        headers,
+        rows.filter((r) => !/탈/.test(r.현재상태 ?? '')),
+    );
 }
 
 function testWrites() {
     const b = planWrites_([2, 3, 5, 6, 7], [0, 1, 3, 4, 5, 6], 7);
-    const ok = JSON.stringify(b) === JSON.stringify([{ start: 2, idx: [0, 1] }, { start: 6, idx: [3, 4, 5, 6] }]);
+    const ok =
+        JSON.stringify(b) ===
+        JSON.stringify([
+            { start: 2, idx: [0, 1] },
+            { start: 6, idx: [3, 4, 5, 6] },
+        ]);
     Logger.log(ok ? 'OK' : 'FAIL ' + JSON.stringify(b));
 }
 
@@ -481,7 +510,11 @@ function setupGoalTabs_(thisMonth) {
         sh.getRange(1, 1, 1, cols.length).setFontWeight('bold');
         sh.setFrozenRows(1);
     };
-    make(SETTINGS_TAB, SETTINGS_COLS, months.map((m) => [m, defaultWeek1Start_(m), 8, 30, 10, 4, 2, 1.5]));
+    make(
+        SETTINGS_TAB,
+        SETTINGS_COLS,
+        months.map((m) => [m, defaultWeek1Start_(m), 8, 30, 10, 4, 2, 1.5]),
+    );
     make(GOALS_TAB, GOALS_COLS, months.flatMap(defaultGoals_));
 }
 
@@ -504,19 +537,29 @@ function defaultGoals_(m) {
     const even = Number(m.split('-')[1]) % 2 === 0;
     const t = even
         ? {
-              도봉: { 1: 1.5, 2: 1.5, 3: 1.5, 사랑: 0.5 }, 성북: { 1: 1.5, 2: 1.5, 3: 1.5, 사랑: 0.5 },
-              노원: { 1: 1.5, 2: 1.5, 3: 1.5, 사랑: 0.5 }, 중랑: { 1: 2, 2: 2, 3: 1, 사랑: 0 },
-              강북: { 1: 1.5, 2: 1.5, 3: 1.5, 사랑: 0.5 }, 대학: { 1: 0.5, 2: 0.5, 3: 0.5, 4: 0.5, 사랑: 0 },
-              새신자: { 1: 1.5, 2: 1.5 }, 이음: { 1: 1 },
+              도봉: { 1: 1.5, 2: 1.5, 3: 1.5, 사랑: 0.5 },
+              성북: { 1: 1.5, 2: 1.5, 3: 1.5, 사랑: 0.5 },
+              노원: { 1: 1.5, 2: 1.5, 3: 1.5, 사랑: 0.5 },
+              중랑: { 1: 2, 2: 2, 3: 1, 사랑: 0 },
+              강북: { 1: 1.5, 2: 1.5, 3: 1.5, 사랑: 0.5 },
+              대학: { 1: 0.5, 2: 0.5, 3: 0.5, 4: 0.5, 사랑: 0 },
+              새신자: { 1: 1.5, 2: 1.5 },
+              이음: { 1: 1 },
           }
         : {
-              도봉: { 1: 0.5, 2: 0.5, 3: 0.5, 사랑: 0.5 }, 성북: { 1: 0.5, 2: 0.5, 3: 0.5, 사랑: 0.5 },
-              노원: { 1: 0.5, 2: 0.5, 3: 0.5, 사랑: 0.5 }, 중랑: { 1: 1, 2: 0.5, 3: 0.5, 사랑: 0 },
-              강북: { 1: 0.5, 2: 0.5, 3: 0.5, 사랑: 0.5 }, 대학: { 1: 3, 2: 3, 3: 3, 4: 3, 사랑: 0 },
-              새신자: { 1: 3, 2: 3 }, 이음: { 1: 1 },
+              도봉: { 1: 0.5, 2: 0.5, 3: 0.5, 사랑: 0.5 },
+              성북: { 1: 0.5, 2: 0.5, 3: 0.5, 사랑: 0.5 },
+              노원: { 1: 0.5, 2: 0.5, 3: 0.5, 사랑: 0.5 },
+              중랑: { 1: 1, 2: 0.5, 3: 0.5, 사랑: 0 },
+              강북: { 1: 0.5, 2: 0.5, 3: 0.5, 사랑: 0.5 },
+              대학: { 1: 3, 2: 3, 3: 3, 4: 3, 사랑: 0 },
+              새신자: { 1: 3, 2: 3 },
+              이음: { 1: 1 },
           };
     // 객체 키는 숫자가 먼저 나오므로 사랑이 각 지역 마지막
-    return Object.entries(t).flatMap(([region, teams]) => Object.entries(teams).map(([team, g]) => [m, region, team, g]));
+    return Object.entries(t).flatMap(([region, teams]) =>
+        Object.entries(teams).map(([team, g]) => [m, region, team, g]),
+    );
 }
 
 function testGoalDefaults() {
@@ -525,15 +568,47 @@ function testGoalDefaults() {
         defaultWeek1Start_('2026-11') === '2026-09-28' && // 11월 첫 월요일 11-02 의 5주 전
         nextMonth_('2026-12') === '2027-01' &&
         defaultGoals_('2026-12').length === 28 &&
-        defaultGoals_('2026-12').filter((r) => r[1] === '도봉').reduce((a, r) => a + r[3], 0) === 5 &&
-        defaultGoals_('2026-11').filter((r) => r[1] === '대학').reduce((a, r) => a + r[3], 0) === 12;
-    Logger.log(ok ? 'OK' : 'FAIL ' + JSON.stringify([defaultWeek1Start_('2026-12'), defaultWeek1Start_('2026-11'), defaultGoals_('2026-12')]));
+        defaultGoals_('2026-12')
+            .filter((r) => r[1] === '도봉')
+            .reduce((a, r) => a + r[3], 0) === 5 &&
+        defaultGoals_('2026-11')
+            .filter((r) => r[1] === '대학')
+            .reduce((a, r) => a + r[3], 0) === 12;
+    Logger.log(
+        ok
+            ? 'OK'
+            : 'FAIL ' +
+                  JSON.stringify([
+                      defaultWeek1Start_('2026-12'),
+                      defaultWeek1Start_('2026-11'),
+                      defaultGoals_('2026-12'),
+                  ]),
+    );
 }
 
 // jdb 교사 관리(teachers) + 상중하 평가(teacher_evaluations) + 교사 프로필(teacher_profiles) 을 한 줄로
 const TEACHER_COLS = [
-    '고유번호', '지역', '팀', '이름', '교사형태', '등급', '평가항목', '평가일',
-    '성별', '출생연도', '종교', '신앙연수', 'MBTI', '에니어그램', '전공', '직업', '취미', '자격증', '선호사항', '가능시간', '메모',
+    '고유번호',
+    '지역',
+    '팀',
+    '이름',
+    '교사형태',
+    '등급',
+    '평가항목',
+    '평가일',
+    '성별',
+    '출생연도',
+    '종교',
+    '신앙연수',
+    'MBTI',
+    '에니어그램',
+    '전공',
+    '직업',
+    '취미',
+    '자격증',
+    '선호사항',
+    '가능시간',
+    '메모',
 ];
 
 // 교사 탭이 없으면 만들고 교사형태·등급 칸에 고르기 목록을 단다 (있으면 빠진 칸만 오른쪽에 추가)
@@ -547,14 +622,18 @@ function setupTeachersTab_() {
     if (missing.length) {
         const need = have.length + missing.length - sh.getMaxColumns();
         if (need > 0) sh.insertColumnsAfter(sh.getMaxColumns(), need);
-        sh.getRange(1, have.length + 1, 1, missing.length).setValues([missing]).setFontWeight('bold');
+        sh.getRange(1, have.length + 1, 1, missing.length)
+            .setValues([missing])
+            .setFontWeight('bold');
         sh.setFrozenRows(1);
     }
     if (!created) return;
     const list = (col, values) =>
-        sh.getRange(2, TEACHER_COLS.indexOf(col) + 1, sh.getMaxRows() - 1, 1).setDataValidation(
-            SpreadsheetApp.newDataValidation().requireValueInList(values, true).setAllowInvalid(false).build(),
-        );
+        sh
+            .getRange(2, TEACHER_COLS.indexOf(col) + 1, sh.getMaxRows() - 1, 1)
+            .setDataValidation(
+                SpreadsheetApp.newDataValidation().requireValueInList(values, true).setAllowInvalid(false).build(),
+            );
     list('교사형태', ['정교사', '교사', '예비교사']);
     list('등급', ['상', '중', '하']);
     // 고유번호·출생연도 앞자리 0 보존
@@ -570,7 +649,9 @@ function diagnose() {
     ss.getSheets().forEach((sh) => {
         const cells = sh.getMaxRows() * sh.getMaxColumns();
         total += cells;
-        console.log(`탭 ${sh.getName()}${sh.isSheetHidden() ? '(숨김)' : ''}: 격자 ${sh.getMaxRows()}x${sh.getMaxColumns()}, 데이터 ${sh.getLastRow()}x${sh.getLastColumn()}`);
+        console.log(
+            `탭 ${sh.getName()}${sh.isSheetHidden() ? '(숨김)' : ''}: 격자 ${sh.getMaxRows()}x${sh.getMaxColumns()}, 데이터 ${sh.getLastRow()}x${sh.getLastColumn()}`,
+        );
     });
     console.log(`전체 칸 수 ${total} (구글 한도 10,000,000)`);
     const step = (name, fn) => {

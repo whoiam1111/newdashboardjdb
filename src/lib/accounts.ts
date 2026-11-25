@@ -4,9 +4,13 @@ import type { User } from './session';
 export const ADMIN_ID = 'jdb';
 export const REGION_IDS = ['도봉', '노원', '성북', '중랑', '강북', '대학', '새신자', '이음'];
 export const ACCOUNT_IDS = [ADMIN_ID, ...REGION_IDS];
-// 비밀번호를 한 번도 안 바꾼 계정은 이 비밀번호로 들어오고, 들어오자마자 바꿔야 한다
-export const DEFAULT_PASSWORD = 'jdb1234';
 export const MIN_PASSWORD = 8;
+// 비밀번호를 한 번도 안 바꾼 계정은 .env 의 INITIAL_PASSWORD 로 들어오고, 들어오자마자 바꿔야 한다
+// 코드가 공개 저장소에 있으므로 처음 비밀번호를 코드에 두지 않는다. 없거나 8자 미만이면 처음 비밀번호 로그인을 막는다
+const initialPassword = () => {
+    const p = process.env.INITIAL_PASSWORD ?? '';
+    return p.length >= MIN_PASSWORD ? p : null;
+};
 
 export const hashPassword = (pw: string) => {
     const salt = randomBytes(16).toString('hex');
@@ -44,7 +48,7 @@ async function callApi(init?: RequestInit, query = '') {
 const OLD_DEPLOY = 'Apps Script 가 예전 버전입니다. api.gs 를 바꾼 뒤 배포 관리 → 수정 → 새 버전으로 다시 배포하세요.';
 
 export const sheetStore: Store = {
-    // 목록이 이상하면 '저장된 비밀번호 없음'으로 보지 않는다 (그러면 jdb1234 로 다시 들어와짐)
+    // 목록이 이상하면 '저장된 비밀번호 없음'으로 보지 않는다 (그러면 처음 비밀번호로 다시 들어와짐)
     list: async () => {
         const data = await callApi(undefined, '&action=accounts');
         if (!Array.isArray(data.accounts)) throw new Error(OLD_DEPLOY);
@@ -64,7 +68,8 @@ export async function authenticate(id: string, pw: string, store: Store = sheetS
     const name = id.trim();
     if (!ACCOUNT_IDS.includes(name) || !pw) return null;
     const stored = (await store.list()).find((a) => a.id === name);
-    const ok = stored ? verifyHash(pw, stored.hash) : pw === DEFAULT_PASSWORD;
+    const init = initialPassword();
+    const ok = stored ? verifyHash(pw, stored.hash) : !!init && pw === init;
     if (!ok) return null;
     return { id: name, region: name === ADMIN_ID ? null : name, mustChange: !stored };
 }
@@ -72,7 +77,7 @@ export async function authenticate(id: string, pw: string, store: Store = sheetS
 // 새 비밀번호 검사. 문제가 있으면 안내 문구
 export function newPasswordError(pw: string, confirm: string) {
     if (pw.length < MIN_PASSWORD) return `비밀번호는 ${MIN_PASSWORD}자 이상이어야 합니다.`;
-    if (pw === DEFAULT_PASSWORD) return `처음 비밀번호(${DEFAULT_PASSWORD})는 다시 쓸 수 없습니다.`;
+    if (pw === initialPassword() || pw === 'jdb1234') return '처음 비밀번호는 다시 쓸 수 없습니다.';
     if (pw !== confirm) return '새 비밀번호와 확인이 다릅니다.';
     return null;
 }
@@ -85,6 +90,7 @@ export const lockedMinutes = (id: string, now = Date.now()) => {
     return f && f.n >= 5 && f.until > now ? Math.ceil((f.until - now) / 60_000) : 0;
 };
 export const recordLogin = (id: string, ok: boolean, now = Date.now()) => {
+    if (!ACCOUNT_IDS.includes(id)) return; // 아무 아이디나 보내 메모리를 채우지 못하게
     if (ok) return void fails.delete(id);
     const f = fails.get(id);
     const n = f && f.until > now ? f.n + 1 : 1;
