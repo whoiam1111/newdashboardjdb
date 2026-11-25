@@ -17,6 +17,9 @@ export const hashPassword = (pw: string) => {
     return `scrypt$${salt}$${scryptSync(pw, salt, 32).toString('hex')}`;
 };
 
+// 관리자가 정해준 비밀번호 표시. verifyHash 는 4번째 칸을 무시하므로 해시 비교에 영향 없음
+export const RESET_MARK = '$reset';
+
 export function verifyHash(pw: string, stored: string) {
     const [kind, salt, hex] = stored.split('$');
     if (kind !== 'scrypt' || !salt || !hex) return false;
@@ -71,7 +74,7 @@ export async function authenticate(id: string, pw: string, store: Store = sheetS
     const init = initialPassword();
     const ok = stored ? verifyHash(pw, stored.hash) : !!init && pw === init;
     if (!ok) return null;
-    return { id: name, region: name === ADMIN_ID ? null : name, mustChange: !stored };
+    return { id: name, region: name === ADMIN_ID ? null : name, mustChange: !stored || stored.hash.endsWith(RESET_MARK) };
 }
 
 // 새 비밀번호 검사. 문제가 있으면 안내 문구

@@ -48,6 +48,9 @@ test('authenticate: 처음엔 INITIAL_PASSWORD + 변경 필요, 바꾼 뒤엔 �
     expect(await authenticate('도봉', 'init-pass-1234', store)).toBe(null);
     expect(await authenticate(' 도봉 ', '새비밀번호123', store)).toEqual({ id: '도봉', region: '도봉', mustChange: false });
     expect(verifyHash('x', 'garbage')).toBe(false);
+    // 관리자가 정해준 비밀번호: 로그인은 되지만 바꿔야 함
+    await store.set('노원', hashPassword('관리자가정함1') + '$reset');
+    expect(await authenticate('노원', '관리자가정함1', store)).toEqual({ id: '노원', region: '노원', mustChange: true });
 });
 
 test('newPasswordError / 로그인 잠금', () => {
@@ -129,6 +132,9 @@ test('findDuplicates / isDropped: 다른 지역 이름+뒷4자리, 지역 계정
     const sb = { id: '성북', region: '성북', mustChange: false };
     expect(findDuplicates(rows, sb, false)).toEqual([]);
     expect(findDuplicates(rows, sb, true)[0].지역).toEqual(['도봉', '노원', '성북']);
+    // 성북 계정에게 도봉 줄 연락처는 뒤 4자리만, 관리자는 전체
+    expect(findDuplicates(rows, sb, true)[0].rows[0].연락처).toBe('***-****-2222');
+    expect(findDuplicates(rows, admin, true)[0].rows[0].연락처).toBe('010-1111-2222');
 });
 
 test('목표 달성: 개강 기간, 발·찾 발굴 주차, 0.5점 나눔, 목표 × 배수, 목표월', () => {
