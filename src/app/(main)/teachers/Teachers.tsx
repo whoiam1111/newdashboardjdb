@@ -5,6 +5,7 @@ import { IdcardOutlined, PieChartOutlined, SearchOutlined } from '@ant-design/ic
 import { CardTitle } from '../../ui';
 import type { ColumnsType } from 'antd/es/table';
 import { PROFILE_COLS, type TeacherView } from '@/lib/teachers';
+import MatchFinder, { type Student } from './Match';
 
 const GRADES = ['상', '중', '하'];
 const TYPES = ['정교사', '교사', '예비교사'];
@@ -99,7 +100,7 @@ function Profile({ t }: { t: TeacherView }) {
     );
 }
 
-export default function Teachers({ teachers, duplicates }: { teachers: TeacherView[]; duplicates: number }) {
+export default function Teachers({ teachers, duplicates, students }: { teachers: TeacherView[]; duplicates: number; students: Student[] }) {
     const [q, setQ] = useState('');
     const [open, setOpen] = useState<TeacherView | null>(null);
     const [showProfile, setShowProfile] = useState(false);
@@ -210,6 +211,7 @@ export default function Teachers({ teachers, duplicates }: { teachers: TeacherVi
                     ]}
                 />
             </Card>
+            <MatchFinder teachers={teachers} students={students} onOpen={setOpen} />
             <Card
                 title={<CardTitle icon={<IdcardOutlined />}>교사 관리 {shown.length}명</CardTitle>}
                 extra={

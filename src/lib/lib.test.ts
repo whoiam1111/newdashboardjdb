@@ -1,7 +1,7 @@
 import { expect, test, vi } from 'vitest';
 import { readSheet, toRecords } from './sheet';
 import { computeGoals, currentCampaign, parseCampaigns } from './goals';
-import { buildTeachers } from './teachers';
+import { ageOf, buildTeachers, matchTeachers } from './teachers';
 import { signSession, verifySession } from './session';
 import { authenticate, hashPassword, lockedMinutes, newPasswordError, recordLogin, sheetStore, verifyHash, type Store, type Stored } from './accounts';
 import { findDuplicates, forUser, isDropped, summarize } from './dashboard';
@@ -190,4 +190,22 @@ test('buildTeachers: 지역 범위, 담당 학생(고유번호 또는 지역+이
     ]);
     expect(buildTeachers(values, students, { id: '노원', region: '노원', mustChange: false }).teachers.map((t) => t.row.고유번호)).toEqual(['T3']);
     expect(all.map((t) => t.row.등급)).toEqual(['상', '중', '중']); // 박교사는 뒤 줄 등급 '중'으로 채워짐
+});
+
+test('ageOf / matchTeachers: 성별·나이·지역·등급·담당·키워드 점수', () => {
+    expect(ageOf('20대초', 2026)).toBe(22);
+    expect(ageOf('1996', 2026)).toBe(30);
+    expect(ageOf('96', 2026)).toBe(30);
+    expect(ageOf('05', 2026)).toBe(21);
+    expect(ageOf('모름', 2026)).toBe(null);
+    const t = (key: string, row: Record<string, string>, 담당: string[] = []) => ({ key, row, 담당, 활동: 담당.length > 0, 프로필: true });
+    const list = [
+        t('a', { 이름: 'A', 지역: '도봉', 성별: '남', 출생연도: '2001', 등급: '상', 교사형태: '정교사', 가능시간: '주말 저녁' }),
+        t('b', { 이름: 'B', 지역: '노원', 성별: '여', 출생연도: '1980', 등급: '하' }, ['x', 'y', 'z', 'w', 'v']),
+        t('c', { 이름: 'C', 지역: '도봉', 성별: '남자', 출생연도: '1975', 등급: '중' }, ['x']),
+    ];
+    const res = matchTeachers(list, { 성별: '남', 나이: '20대초', 지역: '도봉', 키워드: '주말' }, 2026);
+    expect(res.map((m) => m.t.key)).toEqual(['a', 'c', 'b']);
+    expect(res[0].reasons).toEqual(['같은 성별', '같은 지역', '나이 비슷 (±3)', '등급 상', '정교사', '담당 없음', "'주말'"]);
+    expect(matchTeachers(list, { 성별: '남', 같은성별만: true }, 2026).map((m) => m.t.key)).toEqual(['a', 'c']);
 });
