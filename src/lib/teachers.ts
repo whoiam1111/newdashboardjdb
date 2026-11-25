@@ -132,3 +132,83 @@ export function compareRegions(teachers: TeacherView[], year = new Date().getFul
         { region: '합계', ...count(teachers) },
     ];
 }
+
+// 교사 조회 조건 (jdb 교사 조회와 같은 조건). 모두 만족하는 교사만 남긴다
+export const TIME_SLOTS = ['평일 오전', '평일 오후', '평일 저녁', '주말 오전', '주말 오후', '주말 저녁'];
+export type SearchFilters = {
+    q: string;
+    지역: string;
+    성별: '' | '남' | '여';
+    교사형태: '' | '정교사' | '교사' | '예비교사';
+    times: string[];
+    ageMin: string;
+    ageMax: string;
+    mbti: string;
+    mbtiTarget: 'teacher' | 'preferred';
+    ennea: string;
+    enneaTarget: 'teacher' | 'preferred';
+};
+export const EMPTY_FILTERS: SearchFilters = { q: '', 지역: '', 성별: '', 교사형태: '', times: [], ageMin: '', ageMax: '', mbti: '', mbtiTarget: 'teacher', ennea: '', enneaTarget: 'teacher' };
+
+const nospace = (v = '') => v.replace(/\s/g, '');
+// 시트의 가능시간 칸에 들어 있는 시간대 ('평일저녁, 주말 오후' 처럼 띄어쓰기가 달라도)
+export const timesOf = (v = '') => TIME_SLOTS.filter((s) => nospace(v).includes(nospace(s)));
+
+export function searchTeachers(teachers: TeacherView[], f: SearchFilters, year = new Date().getFullYear()) {
+    const q = f.q.trim();
+    const mbti = nospace(f.mbti).toUpperCase();
+    const ennea = /^[1-9]$/.test(f.ennea) ? f.ennea : '';
+    const min = Number(f.ageMin) || 0;
+    const max = Number(f.ageMax) || 0;
+    return teachers.filter(({ row: r }) => {
+        if (q && ![r.이름, r.직업, r.전공, r.자격증, r.취미, r.팀].some((v) => v?.includes(q))) return false;
+        if (f.지역 && r.지역 !== f.지역) return false;
+        if (f.성별 && (r.성별 ?? '').trim().slice(0, 1) !== f.성별) return false;
+        if (f.교사형태 && r.교사형태 !== f.교사형태) return false;
+        if (f.times.length) {
+            const have = timesOf(r.가능시간);
+            if (!f.times.every((t) => have.includes(t))) return false;
+        }
+        if (min || max) {
+            const a = ageOf(r.출생연도, year);
+            if (a === null || (min && a < min) || (max && a > max)) return false;
+        }
+        // MBTI 는 고른 글자가 모두 들어 있으면 (NF → ENFP, INFJ …)
+        if (mbti) {
+            const v = (f.mbtiTarget === 'preferred' ? r.선호사항 : r.MBTI)?.toUpperCase() ?? '';
+            if (![...mbti].every((c) => v.includes(c))) return false;
+        }
+        if (ennea) {
+            const ok = f.enneaTarget === 'preferred' ? new RegExp(`(^|[^0-9])${ennea}([^0-9]|$)`).test(r.선호사항 ?? '') : (r.에니어그램 ?? '').trim().startsWith(ennea);
+            if (!ok) return false;
+        }
+        return true;
+    });
+}
+
+// 이전 종교 "기독교,장로" → "기독교(장로)", 무교 → "무신앙"
+const religionText = (v = '') => {
+    const s = v.trim();
+    if (!s) return '';
+    if (s === '무교') return '무신앙';
+    const [main, detail] = s.split(',');
+    return detail ? `${main}(${detail.trim()})` : main;
+};
+
+// 교사프로필 양식 (jdb 와 같은 형식, 카톡에 그대로 붙여넣는다)
+export function formatTeacherProfile(r: Record<string, string>, year = new Date().getFullYear()) {
+    const faith = r.신앙연수 ? `${r.신앙연수.replace(/년$/, '')}년` : '';
+    const spec = [r.자격증, r.전공, r.직업].map((v) => (v ?? '').trim()).filter(Boolean).join(', ');
+    return [
+        '⭐️ 교사프로필 ⭐️',
+        '',
+        `▪️이름/성별/나이: ${[r.이름, r.성별 ?? '', ageOf(r.출생연도, year) ?? ''].join('/')}`,
+        `▪️S이전종교/신앙년수: ${[religionText(r.종교), faith].filter(Boolean).join('/')}`,
+        `▪️MBTI: ${r.MBTI ?? ''}`,
+        `▪️애니어: ${r.에니어그램 ?? ''}`,
+        `▪️육적스펙, 전공, 종사 분야: ${spec}`,
+        `▪️취미,특기,관심사: ${(r.취미 ?? '').trim()}`,
+        '',
+        `▪️만남가능 일시: ${timesOf(r.가능시간).join(', ')}`,
+    ].join('\n');
+}

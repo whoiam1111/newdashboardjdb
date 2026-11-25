@@ -1,7 +1,7 @@
 import { expect, test, vi } from 'vitest';
 import { readSheet, toRecords } from './sheet';
 import { computeGoals, currentCampaign, parseCampaigns } from './goals';
-import { ageOf, buildTeachers, compareRegions, groupsOf, matchTeachers } from './teachers';
+import { ageOf, buildTeachers, compareRegions, EMPTY_FILTERS, formatTeacherProfile, groupsOf, matchTeachers, searchTeachers, type SearchFilters } from './teachers';
 import { signSession, verifySession } from './session';
 import { authenticate, hashPassword, lockedMinutes, newPasswordError, recordLogin, sheetStore, verifyHash, type Store, type Stored } from './accounts';
 import { findDuplicates, forUser, isDropped, summarize } from './dashboard';
@@ -217,4 +217,27 @@ test('groupsOf / compareRegions: MBTI E·I, 에니어그램 유형, 성별, 나�
     const t = (row: Record<string, string>) => ({ key: row.이름, row, 담당: [], 활동: false, 프로필: true });
     const rows = compareRegions([t({ 이름: 'a', 지역: '도봉', MBTI: 'E', 성별: '남' }), t({ 이름: 'b', 지역: '도봉', MBTI: 'I' }), t({ 이름: 'c', 지역: '노원', MBTI: 'E' })], 2026);
     expect(rows.map((r) => [r.region, r.교사, r.E, r.I, r.남])).toEqual([['도봉', 2, 1, 1, 1], ['노원', 1, 1, 0, 0], ['합계', 3, 2, 1, 1]]);
+});
+
+test('searchTeachers / formatTeacherProfile: jdb 교사 조회 조건과 양식', () => {
+    const t = (row: Record<string, string>) => ({ key: row.이름, row, 담당: [], 활동: false, 프로필: true });
+    const list = [
+        t({ 이름: '가', 지역: '도봉', 성별: '남', 교사형태: '정교사', 출생연도: '1998', MBTI: 'ENFP', 에니어그램: '4w5', 가능시간: '평일저녁, 주말 오후', 직업: '디자이너', 선호사항: 'INTJ 5번' }),
+        t({ 이름: '나', 지역: '노원', 성별: '여자', 교사형태: '교사', 출생연도: '1985', MBTI: 'ISTJ', 에니어그램: '1', 가능시간: '주말 오전' }),
+    ];
+    const f = (p: Partial<SearchFilters>) => searchTeachers(list, { ...EMPTY_FILTERS, ...p }, 2026).map((x) => x.key);
+    expect(f({})).toEqual(['가', '나']);
+    expect(f({ q: '디자' })).toEqual(['가']);
+    expect(f({ 성별: '여' })).toEqual(['나']);
+    expect(f({ times: ['평일 저녁', '주말 오후'] })).toEqual(['가']);
+    expect(f({ times: ['평일 저녁', '주말 오전'] })).toEqual([]);
+    expect(f({ ageMin: '25', ageMax: '30' })).toEqual(['가']);
+    expect(f({ mbti: 'nf' })).toEqual(['가']);
+    expect(f({ mbti: 'NT', mbtiTarget: 'preferred' })).toEqual(['가']);
+    expect(f({ ennea: '4' })).toEqual(['가']);
+    expect(f({ ennea: '5', enneaTarget: 'preferred' })).toEqual(['가']);
+    expect(formatTeacherProfile({ 이름: '가', 성별: '남', 출생연도: '1998', 종교: '기독교,장로', 신앙연수: '3', 직업: '디자이너', 가능시간: '주말오후,평일 저녁' }, 2026)).toContain(
+        '▪️이름/성별/나이: 가/남/28',
+    );
+    expect(formatTeacherProfile({ 이름: '가', 종교: '기독교,장로', 신앙연수: '3', 가능시간: '주말오후,평일 저녁' }, 2026)).toMatch(/기독교\(장로\)\/3년[\s\S]*만남가능 일시: 평일 저녁, 주말 오후/);
 });
